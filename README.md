@@ -38,41 +38,23 @@ python -m venv .venv
 .venv\Scripts\activate.bat
 ```
 
-**3. 安裝所有套件（直接複製貼上）**
+**3. 安裝所有套件（一行搞定）**
 ```bash
-pip install mediapipe==0.10.9 opencv-python==4.13.0.92 numpy==2.4.3 matplotlib==3.10.8 sounddevice==0.5.5
+pip install -r requirements.txt
 ```
 
 ---
 
 ## 📦 完整套件版本清單
 
-> 以下是 `pip freeze` 的完整輸出，供參考。
-> 大部分是自動安裝的相依套件，**主要需要手動安裝的只有上面那幾個**。
+所有套件版本都記錄在 `requirements.txt`，直接用上面的指令安裝即可。
 
-```
-absl-py==2.4.0
-attrs==25.4.0
-cffi==2.0.0
-contourpy==1.3.3
-cycler==0.12.1
-flatbuffers==25.12.19
-fonttools==4.62.1
-kiwisolver==1.5.0
-matplotlib==3.10.8
-mediapipe==0.10.9
-numpy==2.4.3
-opencv-contrib-python==4.13.0.92
-opencv-python==4.13.0.92
-packaging==26.0
-pillow==12.1.1
-protobuf==3.20.3
-pycparser==3.0
-pyparsing==3.3.2
-python-dateutil==2.9.0.post0
-six==1.17.0
-sounddevice==0.5.5
-```
+> **主要套件（核心功能）：**
+> - `mediapipe==0.10.9` — 臉部偵測
+> - `opencv-python==4.13.0.92` — 攝像頭影像處理
+> - `numpy==2.4.3` — 數值計算
+> - `matplotlib==3.10.8` — 視覺化（測試用）
+> - `sounddevice==0.5.5` — 音訊裝置（備用）
 
 ---
 
