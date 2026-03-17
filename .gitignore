@@ -1,0 +1,31 @@
+# Python virtual environment / 虛擬環境（不需要上傳）
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache files / Python 快取檔案
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+
+# IDE / Editor settings / 編輯器設定
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+
+# OS generated files / 系統產生的檔案
+.DS_Store
+Thumbs.db
+
+# Local environment files / 本機環境設定
+.env
+*.env.local
