@@ -45,7 +45,10 @@ Y_SCALE     = 1.0
 Z_SCALE     = 1.0
 
 # 攝影機焦距估算（僅用於旋轉計算）/ Camera focal length (used only for rotation / solvePnP)
-FOCAL_LENGTH_PX = 600.0
+# 640x480 @ 水平FOV 60° 的估算值 / Estimated for 640x480 cam at ~60° HFOV
+# 如果 Z 距離仍不準，請嘗試 457（FOV70°）或 395（FOV78°）
+# If Z is still off, try 457 (FOV70°) or 395 (FOV78°)
+FOCAL_LENGTH_PX = 320
 
 # ─────────────────────────────────────────────────────────────────
 #  X/Y/Z 位置估算（三角測量法）
@@ -61,7 +64,7 @@ REAL_EYE_DIST_CM = 9.0
 # Offset of camera lens from screen center in cm (+ = camera is right/up of screen center)
 # 如果攝影機就在螢幕正上方且若底部對齊，自行調整。
 CAM_OFFSET_X_CM = 0.0   # 攝影機水平偏補（靠右為正）
-CAM_OFFSET_Y_CM = 0.0   # 攝影機垂直偏補（靠上為正）
+CAM_OFFSET_Y_CM = 16.2   # 攝影機垂直偏補（靠上為正）
 
 # ─────────────────────────────────────────────────────────────────
 #  MediaPipe 關鍵點索引 / Face mesh landmark indices
@@ -165,9 +168,10 @@ def estimate_position_from_eyes(landmarks, w: int, h: int):
     focal = FOCAL_LENGTH_PX
     z_cm = (REAL_EYE_DIST_CM * focal) / eye_dist_px
 
-    # 臉部中心：鼻樑中點
-    cx_px = landmarks[LM_NOSE_BRIDGE].x * w
-    cy_px = landmarks[LM_NOSE_BRIDGE].y * h
+    # 臉部中心：雙眼外角中點（比鼻樑更接近眼睛視點位置）
+    # Face centre: midpoint of outer eye corners (better represents eye/viewer position)
+    cx_px = (landmarks[LM_LEFT_EYE].x + landmarks[LM_RIGHT_EYE].x) / 2.0 * w
+    cy_px = (landmarks[LM_LEFT_EYE].y + landmarks[LM_RIGHT_EYE].y) / 2.0 * h
 
     # 影像中心到臉部中心的 pixel 偏量 → cm
     # Pixel offset of face centre from image centre → cm
@@ -384,11 +388,14 @@ def main():
 
                     if not args.no_preview:
                         # 繪製 3D 坐標軸 / Draw 3D axes
+                        # 原點設在雙眼中點（模型空間 Y=+2.5, Z=-4.0）而非鼻尖
+                        # Origin at eye midpoint in model space, not nose tip
+                        _eye_o = np.float32([0.0, 2.5, -4.0])
                         axes = np.float32([
-                            [AXIS_DISPLAY_LEN_CM, 0, 0],
-                            [0, -AXIS_DISPLAY_LEN_CM, 0],
-                            [0, 0, -AXIS_DISPLAY_LEN_CM],
-                            [0, 0, 0]
+                            _eye_o + [AXIS_DISPLAY_LEN_CM, 0, 0],
+                            _eye_o + [0, -AXIS_DISPLAY_LEN_CM, 0],
+                            _eye_o + [0, 0, -AXIS_DISPLAY_LEN_CM],
+                            _eye_o
                         ])
                         ap, _ = cv2.projectPoints(axes, rvec, tvec, cam_mtx, dist_cfs)
                         o = tuple(ap[3].ravel().astype(int))
