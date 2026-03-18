@@ -24,7 +24,43 @@ import argparse
 import numpy as np
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  可調整參數 / TUNABLE PARAMETERS
+#  🌐 ENVIRONMENT PROFILE  ← 換環境時只改這一區！
+#  每次換相機、螢幕、電腦、或部署目標時，請更新以下設定。
+#  Update ONLY this section when switching cameras, screens, or machines.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 🎥 攝影機 / Camera ────────────────────────────────────────────────────────
+# 攝影機編號（0=內建、1=第一支外接，以此類推）
+# Camera index (0=built-in, 1=first USB cam, etc.)
+CAM_INDEX = 0
+
+# 攝影機焦距（像素）— 執行 check_camera.py 查看建議值，或用 calibrate_camera.py 精確校正
+# Focal length in pixels — run check_camera.py for suggestions, calibrate_camera.py for accuracy
+# 640×480 @ FOV60° ≈ 554 | FOV70° ≈ 457 | FOV78° ≈ 395 | FOV90° ≈ 320
+FOCAL_LENGTH_PX = 320
+
+# ── 🖥️ 螢幕 / Screen ─────────────────────────────────────────────────────────
+# 攝影機鏡頭相對螢幕中心的偏移（cm）
+# Offset of camera lens from screen centre in cm
+#   X: 靠右為正 / positive = camera is to the RIGHT of screen centre
+#   Y: 靠上為正 / positive = camera is ABOVE screen centre
+CAM_OFFSET_X_CM =  0.0   # 水平偏移（通常為 0，除非攝影機不在螢幕正中）
+CAM_OFFSET_Y_CM = 16.2   # 垂直偏移（攝影機在螢幕上緣時約等於螢幕高度一半）
+
+# ── 📡 UDP 目標 / UDP Target ──────────────────────────────────────────────────
+# 接收端位址（UE5 / OpenTrack 所在的 IP 與 Port）
+# Target address for UDP packets (UE5 / OpenTrack receiver)
+UDP_HOST = "127.0.0.1"   # 本機="127.0.0.1"；遠端請填對方 IP
+UDP_PORT = 4242
+
+# ── 🧑 使用者 / User ──────────────────────────────────────────────────────────
+# 使用者兩眼外角的真實距離（cm）— 成人平均約 9 cm
+# Real distance between outer eye corners in cm — avg adult ~9 cm
+REAL_EYE_DIST_CM = 9.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ⚙️  調效參數 / TUNING PARAMETERS  ← 通常不必改，除非追蹤感覺不順
+#  Fine-tuning params — usually leave as-is unless tracking feels off
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # 平滑強度：越小越穩（但反應慢），越大越靈敏（但容易抖）
@@ -44,27 +80,7 @@ X_SCALE     = 1.0
 Y_SCALE     = 1.0
 Z_SCALE     = 1.0
 
-# 攝影機焦距估算（僅用於旋轉計算）/ Camera focal length (used only for rotation / solvePnP)
-# 640x480 @ 水平FOV 60° 的估算值 / Estimated for 640x480 cam at ~60° HFOV
-# 如果 Z 距離仍不準，請嘗試 457（FOV70°）或 395（FOV78°）
-# If Z is still off, try 457 (FOV70°) or 395 (FOV78°)
-FOCAL_LENGTH_PX = 320
 
-# ─────────────────────────────────────────────────────────────────
-#  X/Y/Z 位置估算（三角測量法）
-#  不依賴焦距猜測，直接用真實眼距估算。
-#  Position estimation via triangulation (no focal length guessing)
-# ─────────────────────────────────────────────────────────────────
-
-# 兩眼外角的真實距離（cm）— 成人平均兩眼外角距離約 9 cm
-# Real inter-ocular distance (outer eye corners, cm) — avg adult ~9 cm
-REAL_EYE_DIST_CM = 9.0
-
-# 攝影機安裝位置偏移（cm，相對螢幕中心）
-# Offset of camera lens from screen center in cm (+ = camera is right/up of screen center)
-# 如果攝影機就在螢幕正上方且若底部對齊，自行調整。
-CAM_OFFSET_X_CM = 0.0   # 攝影機水平偏補（靠右為正）
-CAM_OFFSET_Y_CM = 16.2   # 攝影機垂直偏補（靠上為正）
 
 # ─────────────────────────────────────────────────────────────────
 #  MediaPipe 關鍵點索引 / Face mesh landmark indices
@@ -259,9 +275,11 @@ class SmoothFilter:
 # ═══════════════════════════════════════════════════════════════════════════════
 def main():
     parser = argparse.ArgumentParser(description='MediaPipe → OpenTrack UDP → UE5')
-    parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--port', default=4242, type=int)
-    parser.add_argument('--cam',  default=0,   type=int)
+    # 預設值讀自 ENVIRONMENT PROFILE，也可用命令列參數覆蓋
+    # Defaults come from ENVIRONMENT PROFILE above; CLI args override them
+    parser.add_argument('--host', default=UDP_HOST)
+    parser.add_argument('--port', default=UDP_PORT, type=int)
+    parser.add_argument('--cam',  default=CAM_INDEX, type=int)
     parser.add_argument('--no-preview', action='store_true',
                         help='關閉預覽視窗（省 CPU）/ Disable preview window')
     args = parser.parse_args()
