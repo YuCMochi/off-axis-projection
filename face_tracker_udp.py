@@ -39,6 +39,15 @@ CAM_INDEX = 0
 # 640×480 @ FOV60° ≈ 554 | FOV70° ≈ 457 | FOV78° ≈ 395 | FOV90° ≈ 320
 FOCAL_LENGTH_PX = 320
 
+# MediaPipe 最多同時偵測幾張臉（越多越耗 CPU，建議 3~5）
+# Max faces to detect simultaneously (more = more CPU, 3~5 recommended)
+MAX_NUM_FACES = 5
+
+# 跨幀臉部中心最大允許位移（pixel）— 超過此距離視為不同人，不繼續鎖定
+# Max pixel distance between frames to still consider it the same face
+# 640×480 畫面下 150px ≈ 畫面寬度 1/4
+LOCK_SNAP_DIST_PX = 150
+
 # ── 🖥️ 螢幕 / Screen ─────────────────────────────────────────────────────────
 # 攝影機鏡頭相對螢幕中心的偏移（cm）
 # Offset of camera lens from screen centre in cm
@@ -221,6 +230,63 @@ def sample_2d(landmarks, w: int, h: int) -> np.ndarray:
     )
 
 
+
+def select_face(all_faces, w: int, h: int, prev_eye_mid_px):
+    """
+    從 MediaPipe 回傳的多張臉中，選出要追蹤的那一張。
+
+    邏輯 / Logic:
+      - 若有鎖定位置（prev_eye_mid_px 不為 None）：
+          找眼睛中點最靠近上一幀鎖定位置的臉。
+          若最近距離 < LOCK_SNAP_DIST_PX，繼續追蹤（鎖定保持）。
+          否則視為鎖定丟失，退回「選最顯眼」。
+      - 若無鎖定 / 鎖定丟失：
+          選眼距最大的臉（眼距大 = 最靠近鏡頭的人）。
+
+    Args:
+        all_faces: MediaPipe multi_face_landmarks 列表
+        w, h     : 畫面寬高（pixel）
+        prev_eye_mid_px: 上一幀鎖定臉的眼睛中點 (x, y)，None 表示尚未鎖定
+
+    Returns:
+        (landmark_list, new_eye_mid_px)
+        new_eye_mid_px 為本幀選中臉的眼睛中點，供下一幀使用
+    """
+    def eye_mid(lm):
+        """計算該臉的眼睛中點（pixel）/ Eye midpoint in pixels."""
+        ex = (lm[LM_LEFT_EYE].x + lm[LM_RIGHT_EYE].x) / 2.0 * w
+        ey = (lm[LM_LEFT_EYE].y + lm[LM_RIGHT_EYE].y) / 2.0 * h
+        return ex, ey
+
+    def eye_dist_px(lm):
+        """計算兩眼外角的像素距離 / Eye distance in pixels."""
+        lx = lm[LM_LEFT_EYE].x * w;  ly = lm[LM_LEFT_EYE].y * h
+        rx = lm[LM_RIGHT_EYE].x * w; ry = lm[LM_RIGHT_EYE].y * h
+        return math.sqrt((rx - lx)**2 + (ry - ly)**2)
+
+    candidates = [face.landmark for face in all_faces]
+
+    # ── 有鎖定位置：找最近的臉 ───────────────────────────────────────────────
+    if prev_eye_mid_px is not None:
+        px, py = prev_eye_mid_px
+        best, best_dist = None, float('inf')
+        for lm in candidates:
+            ex, ey = eye_mid(lm)
+            d = math.sqrt((ex - px)**2 + (ey - py)**2)
+            if d < best_dist:
+                best_dist = d
+                best = lm
+
+        # 距離夠近 → 繼續鎖定
+        if best_dist < LOCK_SNAP_DIST_PX:
+            return best, eye_mid(best)
+        # 距離太遠（原主人離開）→ 鎖定丟失，往下繼續「選最顯眼」
+
+    # ── 無鎖定 / 鎖定丟失：選眼距最大（最近）的臉 ─────────────────────────
+    best = max(candidates, key=eye_dist_px)
+    return best, eye_mid(best)
+
+
 def solve_pose(image_pts: np.ndarray, w: int, h: int,
                prev_rvec=None, prev_tvec=None):
     """
@@ -296,7 +362,7 @@ def main():
 
     mp_mesh = mp.solutions.face_mesh
     face_mesh = mp_mesh.FaceMesh(
-        max_num_faces=1,
+        max_num_faces=MAX_NUM_FACES,   # 允許偵測多張臉以支援 face lock
         refine_landmarks=True,
         min_detection_confidence=MEDIAPIPE_MIN_CONF,
         min_tracking_confidence=MEDIAPIPE_MIN_CONF
@@ -313,6 +379,10 @@ def main():
     # 儲存上一帧的 solvePnP 結果，用於增量 refine（更穩定）
     prev_rvec = None
     prev_tvec = None
+
+    # Face lock：記錄上一帧鎖定臉的眼睛中點（pixel），None 表示尚未鎖定
+    # Face lock: eye midpoint of locked face from last frame; None = unlocked
+    locked_eye_mid = None
 
     cam_mtx  = None   # 第一帧後初始化
     dist_cfs = np.zeros((4, 1))
@@ -333,7 +403,11 @@ def main():
             results = face_mesh.process(rgb)
 
             if results.multi_face_landmarks:
-                lm      = results.multi_face_landmarks[0].landmark
+                # 用 face lock 邏輯選出要追蹤的那張臉
+                # Use face-lock logic to pick the target face
+                lm, locked_eye_mid = select_face(
+                    results.multi_face_landmarks, w, h, locked_eye_mid
+                )
                 img_pts = sample_2d(lm, w, h)
 
                 pnp = solve_pose(img_pts, w, h, prev_rvec, prev_tvec)
@@ -428,9 +502,11 @@ def main():
                             f"X:{tx:+6.1f}  Y:{ty:+6.1f}  Z:{tz:+6.1f} cm",
                             (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,200,255), 2)
             else:
-                # 臉部消失時，重置 solvePnP 初始猜測，避免舊值污染下一次
-                prev_rvec = None
-                prev_tvec = None
+                # 臉部消失時，重置 solvePnP 初始猜測與 face lock
+                # Reset solvePnP guess and face lock when no face is detected
+                prev_rvec      = None
+                prev_tvec      = None
+                locked_eye_mid = None   # 下次有人出現時重新從最顯眼的臉開始鎖
                 if not args.no_preview:
                     cv2.putText(frame, "No face / 未偵測到臉部",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
