@@ -72,14 +72,15 @@ REAL_EYE_DIST_CM = 9.0
 #  Fine-tuning params — usually leave as-is unless tracking feels off
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# 平滑強度：越小越穩（但反應慢），越大越靈敏（但容易抖）
-# Smoothing: lower = smoother/slower, higher = faster/jittery
-SMOOTH_ALPHA = 0.25   # 建議範圍 0.05~0.25
-
-# 死區：低於此變化量的微抖就直接忽略，單位：degree / cm
-# Deadzone: ignore changes smaller than this threshold (deg / cm)
-DEADZONE_ROT = 0.3    # 旋轉死區（度）
-DEADZONE_POS = 0.15   # 位移死區（cm）
+# ── 卡爾曼濾波 / Kalman Filter ──────────────────────────────────────────────
+# process_noise：越大 → 越信任量測值（靈敏但微抖），越小 → 越信任預測（穩但慢）
+# measurement_noise：越大 → 越不信任量測值（更平滑），越小 → 越靈敏
+# process_noise:  higher = trust measurement more (responsive but jittery)
+# measurement_noise: higher = trust measurement less (smoother but slower)
+KALMAN_PROCESS_NOISE_ROT   = 0.001   # 旋轉軸（Yaw/Pitch/Roll）— 越小越穩
+KALMAN_MEASURE_NOISE_ROT   = 0.5     # 旋轉量測噪聲 — 越大越不信任抖動
+KALMAN_PROCESS_NOISE_POS   = 0.001   # 位移軸（X/Y/Z）
+KALMAN_MEASURE_NOISE_POS   = 0.3     # 位移量測噪聲
 
 # 靈敏度倍率 / Sensitivity multiplier
 YAW_SCALE   = 1.0
@@ -88,6 +89,10 @@ ROLL_SCALE  = 1.0
 X_SCALE     = 1.0
 Y_SCALE     = 1.0
 Z_SCALE     = 1.0
+
+# 攝影機讀取連續失敗幾幀就自動停止（防止斷線後無限 loop）
+# Auto-stop after this many consecutive read failures (prevents infinite loop)
+MAX_READ_FAILURES = 30
 
 
 
@@ -288,15 +293,19 @@ def select_face(all_faces, w: int, h: int, prev_eye_mid_px):
 
 
 def solve_pose(image_pts: np.ndarray, w: int, h: int,
-               prev_rvec=None, prev_tvec=None):
+               dist_coeffs=None, prev_rvec=None, prev_tvec=None):
     """
     執行 solvePnP，回傳 (rvec, tvec) 或 None。
     使用 SQPNP（比 ITERATIVE 更穩定，不怕初始值）。
     若有上一帧的結果，改用 SOLVEPNP_ITERATIVE + useExtrinsicGuess 做 refine，
     這樣可以得到最穩定的效果。
+
+    Args:
+        dist_coeffs: 畸變校正係數，None 時使用零畸變
+                     Distortion coefficients; None = no distortion
     """
     cam = get_cam_matrix(w, h)
-    dist = np.zeros((4, 1))
+    dist = dist_coeffs if dist_coeffs is not None else np.zeros((4, 1))
 
     if prev_rvec is not None and prev_tvec is not None:
         # 有上一帧：用它當初始猜測，做 iterative refine（最穩）
@@ -316,24 +325,81 @@ def solve_pose(image_pts: np.ndarray, w: int, h: int,
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  EMA 低通濾波器 + 死區 / Low-pass filter with deadzone
+#  卡爾曼濾波器 / Kalman Filter (replaces EMA for lower latency)
+#
+#  原理 / How it works:
+#    狀態 = [位置, 速度]，量測 = [位置]
+#    State = [position, velocity], Measurement = [position]
+#    每幀先用速度「預測」下一個位置（幾乎零延遲），
+#    再用實際量測值「修正」預測（降低抖動）。
+#    Each frame: predict next position using velocity (near-zero lag),
+#    then correct prediction with actual measurement (reduces jitter).
 # ═══════════════════════════════════════════════════════════════════════════════
-class SmoothFilter:
-    def __init__(self, alpha: float, deadzone: float = 0.0):
-        self.alpha    = alpha     # 平滑係數
-        self.deadzone = deadzone  # 死區閾值
-        self.value    = None      # 目前輸出值
+class KalmanFilter1D:
+    """
+    1D 卡爾曼濾波器，狀態=[位置, 速度]。
+    1D Kalman filter with state=[position, velocity].
+    用 cv2.KalmanFilter 實作。
+    """
+    def __init__(self, process_noise: float = 0.01,
+                 measurement_noise: float = 0.1):
+        # 2 個狀態（位置 + 速度），1 個量測（位置）
+        # 2 states (pos + vel), 1 measurement (pos)
+        self.kf = cv2.KalmanFilter(2, 1)
 
-    def update(self, new_val: float) -> float:
-        if self.value is None:
-            self.value = new_val
-            return self.value
-        # 死區：若變化太小，直接沿用舊值，不更新
-        if abs(new_val - self.value) < self.deadzone:
-            return self.value
-        # EMA 平滑
-        self.value = self.alpha * new_val + (1 - self.alpha) * self.value
-        return self.value
+        # 狀態轉移矩陣：位置 = 位置 + 速度 × dt（dt=1 幀）
+        # Transition: pos = pos + vel*dt (dt=1 frame)
+        self.kf.transitionMatrix = np.array(
+            [[1, 1],
+             [0, 1]], dtype=np.float32)
+
+        # 量測矩陣：只量測位置
+        # Measurement: observe position only
+        self.kf.measurementMatrix = np.array(
+            [[1, 0]], dtype=np.float32)
+
+        # 過程噪聲（模型不確定性）
+        # Process noise (model uncertainty)
+        self.kf.processNoiseCov = np.eye(2, dtype=np.float32) * process_noise
+
+        # 量測噪聲（感測器不確定性）
+        # Measurement noise (sensor uncertainty)
+        self.kf.measurementNoiseCov = np.array(
+            [[measurement_noise]], dtype=np.float32)
+
+        # 初始狀態後驗協方差（較大 = 前幾幀快速收斂）
+        # Initial posterior covariance (large = converge fast in first frames)
+        self.kf.errorCovPost = np.eye(2, dtype=np.float32)
+
+        # 初始狀態
+        self.kf.statePost = np.zeros((2, 1), dtype=np.float32)
+        self._initialized = False
+
+    def update(self, measurement: float) -> float:
+        """
+        輸入新量測值，回傳濾波後的估計值。
+        Feed new measurement, return filtered estimate.
+        """
+        meas = np.array([[np.float32(measurement)]])
+
+        if not self._initialized:
+            # 第一次：直接把狀態設為量測值，速度為 0
+            # First call: set state to measurement, velocity=0
+            self.kf.statePost = np.array(
+                [[np.float32(measurement)], [0.0]], dtype=np.float32)
+            self._initialized = True
+            return measurement
+
+        # 預測 → 修正 / Predict → Correct
+        self.kf.predict()
+        corrected = self.kf.correct(meas)
+        return float(corrected[0, 0])
+
+    def reset(self):
+        """重置濾波器狀態 / Reset filter state."""
+        self.kf.statePost = np.zeros((2, 1), dtype=np.float32)
+        self.kf.errorCovPost = np.eye(2, dtype=np.float32)
+        self._initialized = False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -348,11 +414,24 @@ def main():
     parser.add_argument('--cam',  default=CAM_INDEX, type=int)
     parser.add_argument('--no-preview', action='store_true',
                         help='關閉預覽視窗（省 CPU）/ Disable preview window')
+    parser.add_argument('--distortion', default=None, type=str,
+                        help='鏡頭畸變校正 .npz 檔路徑 / Path to distortion .npz file')
     args = parser.parse_args()
 
     print(f"[INFO] 目標 / Target : {args.host}:{args.port}")
     print(f"[INFO] 攝影機 / Cam  : #{args.cam}")
     print("[INFO] 按 Q/ESC 結束 / Press Q or ESC to quit  (no-preview: Ctrl+C)")
+
+    # ── 載入畸變校正 / Load distortion coefficients ─────────────────────────
+    dist_coeffs = None
+    if args.distortion:
+        try:
+            data = np.load(args.distortion)
+            dist_coeffs = data['dist_coeffs']
+            print(f"[INFO] 已載入畸變校正 / Loaded distortion from: {args.distortion}")
+        except Exception as e:
+            print(f"[WARN] 無法載入畸變校正 / Failed to load distortion: {e}")
+            print("[WARN] 繼續使用零畸變 / Continuing with zero distortion")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     cap  = cv2.VideoCapture(args.cam)
@@ -368,13 +447,14 @@ def main():
         min_tracking_confidence=MEDIAPIPE_MIN_CONF
     )
 
-    # 每軸一個濾波器，旋轉 / 位移分開設死區
-    f_yaw   = SmoothFilter(SMOOTH_ALPHA, DEADZONE_ROT)
-    f_pitch = SmoothFilter(SMOOTH_ALPHA, DEADZONE_ROT)
-    f_roll  = SmoothFilter(SMOOTH_ALPHA, DEADZONE_ROT)
-    f_x     = SmoothFilter(SMOOTH_ALPHA, DEADZONE_POS)
-    f_y     = SmoothFilter(SMOOTH_ALPHA, DEADZONE_POS)
-    f_z     = SmoothFilter(SMOOTH_ALPHA, DEADZONE_POS)
+    # 每軸一個卡爾曼濾波器，旋轉 / 位移使用不同噪聲參數
+    # One Kalman filter per axis; rotation & position use different noise params
+    kf_yaw   = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT)
+    kf_pitch = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT)
+    kf_roll  = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT)
+    kf_x     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS)
+    kf_y     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS)
+    kf_z     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS)
 
     # 儲存上一帧的 solvePnP 結果，用於增量 refine（更穩定）
     prev_rvec = None
@@ -387,11 +467,22 @@ def main():
     cam_mtx  = None   # 第一帧後初始化
     dist_cfs = np.zeros((4, 1))
 
+    # 攝影機讀取失敗計數器 / Camera read failure counter
+    read_fail_count = 0
+    # 幀數計數器（debug 輸出用）/ Frame counter for debug prints
+    frame_count = 0
+
     try:
         while True:
             ok, frame = cap.read()
             if not ok:
+                read_fail_count += 1
+                if read_fail_count >= MAX_READ_FAILURES:
+                    print(f"[ERROR] 攝影機連續 {MAX_READ_FAILURES} 幀讀取失敗，自動停止")
+                    print("[ERROR] Camera read failed continuously, auto-stopping")
+                    break
                 continue
+            read_fail_count = 0  # 讀到了就歸零 / Reset on success
 
             frame = cv2.flip(frame, 1)     # 水平翻轉（鏡像）
             h, w  = frame.shape[:2]
@@ -410,7 +501,7 @@ def main():
                 )
                 img_pts = sample_2d(lm, w, h)
 
-                pnp = solve_pose(img_pts, w, h, prev_rvec, prev_tvec)
+                pnp = solve_pose(img_pts, w, h, dist_coeffs, prev_rvec, prev_tvec)
                 if pnp:
                     rvec, tvec = pnp
                     prev_rvec, prev_tvec = rvec.copy(), tvec.copy()
@@ -457,24 +548,22 @@ def main():
                     else:
                         tx, ty, tz = 0.0, 0.0, 0.0
 
-                    # 平滑 + 死區
-                    yaw   = f_yaw  .update(yaw)
-                    pitch = f_pitch.update(pitch)
-                    roll  = f_roll .update(roll)
-                    tx    = f_x    .update(tx)
-                    ty    = f_y    .update(ty)
-                    tz    = f_z    .update(tz)
+                    # 卡爾曼濾波（預測 + 修正）/ Kalman filter (predict + correct)
+                    yaw   = kf_yaw  .update(yaw)
+                    pitch = kf_pitch.update(pitch)
+                    roll  = kf_roll .update(roll)
+                    tx    = kf_x    .update(tx)
+                    ty    = kf_y    .update(ty)
+                    tz    = kf_z    .update(tz)
 
                     # 送出 OpenTrack UDP 封包
                     packet = pack_opentrack(tx, ty, tz, yaw, pitch, roll)
                     sock.sendto(packet, (args.host, args.port))
 
-                    # debug 輸出（每 30 帧印一次，不影響效能）
-                    # Debug print every 30 frames
-                    if not hasattr(main, '_fc'):
-                        main._fc = 0
-                    main._fc += 1
-                    if main._fc % DEBUG_PRINT_INTERVAL == 0:
+                    # debug 輸出（每 N 帧印一次，不影響效能）
+                    # Debug print every N frames
+                    frame_count += 1
+                    if frame_count % DEBUG_PRINT_INTERVAL == 0:
                         print(f"  Yaw:{yaw:+6.1f}  Pitch:{pitch:+6.1f}  Roll:{roll:+5.1f}  "
                               f"X:{tx:+5.1f}  Y:{ty:+5.1f}  Z:{tz:+5.1f}")
 
@@ -502,11 +591,13 @@ def main():
                             f"X:{tx:+6.1f}  Y:{ty:+6.1f}  Z:{tz:+6.1f} cm",
                             (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,200,255), 2)
             else:
-                # 臉部消失時，重置 solvePnP 初始猜測與 face lock
-                # Reset solvePnP guess and face lock when no face is detected
+                # 臉部消失時，重置 solvePnP 初始猜測、face lock、卡爾曼濾波器
+                # Reset solvePnP guess, face lock, and Kalman filters
                 prev_rvec      = None
                 prev_tvec      = None
                 locked_eye_mid = None   # 下次有人出現時重新從最顯眼的臉開始鎖
+                for kf in (kf_yaw, kf_pitch, kf_roll, kf_x, kf_y, kf_z):
+                    kf.reset()
                 if not args.no_preview:
                     cv2.putText(frame, "No face / 未偵測到臉部",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
