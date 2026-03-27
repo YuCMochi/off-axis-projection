@@ -90,6 +90,13 @@ X_SCALE     = 1.0
 Y_SCALE     = 1.0
 Z_SCALE     = 1.0
 
+# ── 自適應噪聲 / Adaptive Noise ──────────────────────────────────────────────
+# 靜止時自動提高 measurement noise（更穩），移動時恢復正常（低延遲）
+# When still: increase measurement noise (smoother); when moving: normal (responsive)
+ADAPTIVE_NOISE_MULTIPLIER = 8.0    # 靜止時 measurement noise 倍率
+ADAPTIVE_VEL_THRESHOLD_ROT = 0.5   # 旋轉速度低於此值（°/幀）視為靜止
+ADAPTIVE_VEL_THRESHOLD_POS = 0.3   # 位移速度低於此值（cm/幀）視為靜止
+
 # 攝影機讀取連續失敗幾幀就自動停止（防止斷線後無限 loop）
 # Auto-stop after this many consecutive read failures (prevents infinite loop)
 MAX_READ_FAILURES = 30
@@ -99,14 +106,24 @@ MAX_READ_FAILURES = 30
 # ─────────────────────────────────────────────────────────────────
 #  MediaPipe 關鍵點索引 / Face mesh landmark indices
 # ─────────────────────────────────────────────────────────────────
-LM_NOSE_TIP    = 4    # 鼻尖
+# 原始 6 點 / Original 6 points
+LM_NOSE_TIP       = 4    # 鼻尖
+LM_CHIN           = 152  # 下巴
+LM_LEFT_EYE       = 33   # 左眼外角
+LM_RIGHT_EYE      = 263  # 右眼外角
+LM_LEFT_MOUTH     = 61   # 左嘴角
+LM_RIGHT_MOUTH    = 291  # 右嘴角
+LM_NOSE_BRIDGE    = 168  # 鼻樑中點（用於臉部中心位置）
 
-LM_CHIN        = 152  # 下巴
-LM_LEFT_EYE    = 33   # 左眼外角
-LM_RIGHT_EYE   = 263  # 右眼外角
-LM_LEFT_MOUTH  = 61   # 左嘴角
-LM_RIGHT_MOUTH = 291  # 右嘴角
-LM_NOSE_BRIDGE = 168  # 鼻樑中點（用於臉部中心位置）
+# 新增 8 點：提升 solvePnP 穩定性 / 8 additional points for stability
+LM_FOREHEAD       = 10   # 額頭頂部中心
+LM_LEFT_EYE_IN    = 133  # 左眼內角
+LM_RIGHT_EYE_IN   = 362  # 右眼內角
+LM_LEFT_BROW_OUT  = 70   # 左眉外側
+LM_RIGHT_BROW_OUT = 300  # 右眉外側
+LM_LEFT_JAW       = 127  # 左顎
+LM_RIGHT_JAW      = 356  # 右顎
+LM_NOSE_BOTTOM    = 2    # 鼻底中心
 
 # ─────────────────────────────────────────────────────────────────
 #  演算法常數 / Algorithm constants
@@ -136,18 +153,34 @@ DEBUG_PRINT_INTERVAL = 30
 
 # ─────────────────────────────────────────────────────────────────
 #  solvePnP 人臉 3D 模型參考點（單位：cm，鼻尖為原點）
-# 選用分佈廣且穩定的關鍵點：鼻尖、下巴、雙眼外角、雙嘴角
-# 3D face model reference points (cm, nose-tip as origin)
+#  14 個分佈廣的點，比 6 點更穩定（最小平方法平均掉噪聲）
+#  14 well-distributed points for stable PnP (least-squares averages out noise)
 # ─────────────────────────────────────────────────────────────────
 FACE_MODEL_3D = np.array([
-    [ 0.000,  0.000,  0.000],  # LM_NOSE_TIP    (4)   鼻尖
-    [ 0.000, -3.300, -1.300],  # LM_CHIN        (152) 下巴
-    [-4.500,  2.500, -4.000],  # LM_LEFT_EYE    (33)  左眼外角
-    [ 4.500,  2.500, -4.000],  # LM_RIGHT_EYE   (263) 右眼外角
-    [-2.000,  0.000, -2.200],  # LM_LEFT_MOUTH  (61)  左嘴角
-    [ 2.000,  0.000, -2.200],  # LM_RIGHT_MOUTH (291) 右嘴角
+    # ── 原始 6 點 / Original 6 ──
+    [ 0.000,  0.000,  0.000],  # (4)   鼻尖 / Nose tip
+    [ 0.000, -3.300, -1.300],  # (152) 下巴 / Chin
+    [-4.500,  2.500, -4.000],  # (33)  左眼外角 / Left eye outer
+    [ 4.500,  2.500, -4.000],  # (263) 右眼外角 / Right eye outer
+    [-2.000,  0.000, -2.200],  # (61)  左嘴角 / Left mouth
+    [ 2.000,  0.000, -2.200],  # (291) 右嘴角 / Right mouth
+    # ── 新增 8 點 / 8 new points ──
+    [ 0.000,  6.500, -1.500],  # (10)  額頭 / Forehead top
+    [-2.500,  2.700, -3.200],  # (133) 左眼內角 / Left eye inner
+    [ 2.500,  2.700, -3.200],  # (362) 右眼內角 / Right eye inner
+    [-4.200,  3.800, -3.000],  # (70)  左眉外側 / Left brow outer
+    [ 4.200,  3.800, -3.000],  # (300) 右眉外側 / Right brow outer
+    [-6.200, -1.500, -5.500],  # (127) 左顎 / Left jaw
+    [ 6.200, -1.500, -5.500],  # (356) 右顎 / Right jaw
+    [ 0.000, -1.000, -0.500],  # (2)   鼻底 / Nose bottom
 ], dtype=np.float64)
-FACE_MODEL_IDX = [LM_NOSE_TIP, LM_CHIN, LM_LEFT_EYE, LM_RIGHT_EYE, LM_LEFT_MOUTH, LM_RIGHT_MOUTH]
+FACE_MODEL_IDX = [
+    LM_NOSE_TIP, LM_CHIN, LM_LEFT_EYE, LM_RIGHT_EYE,
+    LM_LEFT_MOUTH, LM_RIGHT_MOUTH,
+    LM_FOREHEAD, LM_LEFT_EYE_IN, LM_RIGHT_EYE_IN,
+    LM_LEFT_BROW_OUT, LM_RIGHT_BROW_OUT,
+    LM_LEFT_JAW, LM_RIGHT_JAW, LM_NOSE_BOTTOM,
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -337,12 +370,19 @@ def solve_pose(image_pts: np.ndarray, w: int, h: int,
 # ═══════════════════════════════════════════════════════════════════════════════
 class KalmanFilter1D:
     """
-    1D 卡爾曼濾波器，狀態=[位置, 速度]。
-    1D Kalman filter with state=[position, velocity].
-    用 cv2.KalmanFilter 實作。
+    1D 自適應卡爾曼濾波器，狀態=[位置, 速度]。
+    1D Adaptive Kalman filter with state=[position, velocity].
+
+    自適應機制 / Adaptive mechanism:
+      當估計速度接近 0（靜止）時，自動提高 measurement noise，
+      讓輸出更穩定；移動時恢復正常 noise，保持低延遲。
+      When estimated velocity ≈ 0 (still), automatically increase
+      measurement noise for stability; restore when moving.
     """
     def __init__(self, process_noise: float = 0.01,
-                 measurement_noise: float = 0.1):
+                 measurement_noise: float = 0.1,
+                 vel_threshold: float = 1.0,
+                 adaptive_multiplier: float = 1.0):
         # 2 個狀態（位置 + 速度），1 個量測（位置）
         # 2 states (pos + vel), 1 measurement (pos)
         self.kf = cv2.KalmanFilter(2, 1)
@@ -362,10 +402,15 @@ class KalmanFilter1D:
         # Process noise (model uncertainty)
         self.kf.processNoiseCov = np.eye(2, dtype=np.float32) * process_noise
 
-        # 量測噪聲（感測器不確定性）
-        # Measurement noise (sensor uncertainty)
+        # 量測噪聲（感測器不確定性）— 基準值，自適應模式下會動態調整
+        # Measurement noise (sensor uncertainty) — base value, dynamically adjusted
+        self._base_meas_noise = measurement_noise
         self.kf.measurementNoiseCov = np.array(
             [[measurement_noise]], dtype=np.float32)
+
+        # 自適應參數 / Adaptive parameters
+        self._vel_threshold = vel_threshold       # 速度閾值（低於此視為靜止）
+        self._adaptive_mult = adaptive_multiplier  # 靜止時 noise 倍率
 
         # 初始狀態後驗協方差（較大 = 前幾幀快速收斂）
         # Initial posterior covariance (large = converge fast in first frames)
@@ -390,8 +435,19 @@ class KalmanFilter1D:
             self._initialized = True
             return measurement
 
-        # 預測 → 修正 / Predict → Correct
+        # 預測 / Predict
         self.kf.predict()
+
+        # 自適應：根據速度「漸變」measurement noise（不是開關式！）
+        # Adaptive: GRADUALLY adjust noise based on velocity (no sudden switch!)
+        # vel=0 → noise × multiplier（最穩）; vel≥threshold → noise × 1（最靈敏）
+        est_vel = abs(float(self.kf.statePost[1, 0]))
+        t = min(est_vel / self._vel_threshold, 1.0)  # 0=靜止, 1=移動中
+        # 線性內插：靜止=base×mult, 移動=base×1
+        adaptive_factor = self._adaptive_mult * (1.0 - t) + 1.0 * t
+        self.kf.measurementNoiseCov[0, 0] = self._base_meas_noise * adaptive_factor
+
+        # 修正 / Correct
         corrected = self.kf.correct(meas)
         return float(corrected[0, 0])
 
@@ -399,6 +455,7 @@ class KalmanFilter1D:
         """重置濾波器狀態 / Reset filter state."""
         self.kf.statePost = np.zeros((2, 1), dtype=np.float32)
         self.kf.errorCovPost = np.eye(2, dtype=np.float32)
+        self.kf.measurementNoiseCov[0, 0] = self._base_meas_noise
         self._initialized = False
 
 
@@ -447,14 +504,20 @@ def main():
         min_tracking_confidence=MEDIAPIPE_MIN_CONF
     )
 
-    # 每軸一個卡爾曼濾波器，旋轉 / 位移使用不同噪聲參數
-    # One Kalman filter per axis; rotation & position use different noise params
-    kf_yaw   = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT)
-    kf_pitch = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT)
-    kf_roll  = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT)
-    kf_x     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS)
-    kf_y     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS)
-    kf_z     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS)
+    # 每軸一個卡爾曼濾波器，旋轉 / 位移使用不同噪聲與自適應參數
+    # One Kalman filter per axis; rotation & position use different noise + adaptive params
+    kf_yaw   = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT,
+                               ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_NOISE_MULTIPLIER)
+    kf_pitch = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT,
+                               ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_NOISE_MULTIPLIER)
+    kf_roll  = KalmanFilter1D(KALMAN_PROCESS_NOISE_ROT, KALMAN_MEASURE_NOISE_ROT,
+                               ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_NOISE_MULTIPLIER)
+    kf_x     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS,
+                               ADAPTIVE_VEL_THRESHOLD_POS, ADAPTIVE_NOISE_MULTIPLIER)
+    kf_y     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS,
+                               ADAPTIVE_VEL_THRESHOLD_POS, ADAPTIVE_NOISE_MULTIPLIER)
+    kf_z     = KalmanFilter1D(KALMAN_PROCESS_NOISE_POS, KALMAN_MEASURE_NOISE_POS,
+                               ADAPTIVE_VEL_THRESHOLD_POS, ADAPTIVE_NOISE_MULTIPLIER)
 
     # 儲存上一帧的 solvePnP 結果，用於增量 refine（更穩定）
     prev_rvec = None

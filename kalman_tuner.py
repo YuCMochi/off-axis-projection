@@ -29,6 +29,7 @@ from face_tracker_udp import (
     MEDIAPIPE_MIN_CONF, DEBUG_PRINT_INTERVAL, AXIS_DISPLAY_LEN_CM,
     YAW_SCALE, PITCH_SCALE, ROLL_SCALE, X_SCALE, Y_SCALE, Z_SCALE,
     PITCH_GIMBAL_THRESHOLD, UDP_HOST, UDP_PORT,
+    ADAPTIVE_NOISE_MULTIPLIER, ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_VEL_THRESHOLD_POS,
     LM_LEFT_EYE, LM_RIGHT_EYE,
     get_cam_matrix, estimate_position_from_eyes, rot_to_euler,
     sample_2d, select_face, solve_pose, KalmanFilter1D,
@@ -79,14 +80,20 @@ def on_meas_pos(pos):
 
 
 def rebuild_filters():
-    """用當前滑桿參數重建所有 Kalman filter。"""
+    """用當前滑桿參數重建所有 Kalman filter（含自適應噪聲）。"""
     return {
-        'yaw':   KalmanFilter1D(params['proc_rot'], params['meas_rot']),
-        'pitch': KalmanFilter1D(params['proc_rot'], params['meas_rot']),
-        'roll':  KalmanFilter1D(params['proc_rot'], params['meas_rot']),
-        'x':     KalmanFilter1D(params['proc_pos'], params['meas_pos']),
-        'y':     KalmanFilter1D(params['proc_pos'], params['meas_pos']),
-        'z':     KalmanFilter1D(params['proc_pos'], params['meas_pos']),
+        'yaw':   KalmanFilter1D(params['proc_rot'], params['meas_rot'],
+                                 ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_NOISE_MULTIPLIER),
+        'pitch': KalmanFilter1D(params['proc_rot'], params['meas_rot'],
+                                 ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_NOISE_MULTIPLIER),
+        'roll':  KalmanFilter1D(params['proc_rot'], params['meas_rot'],
+                                 ADAPTIVE_VEL_THRESHOLD_ROT, ADAPTIVE_NOISE_MULTIPLIER),
+        'x':     KalmanFilter1D(params['proc_pos'], params['meas_pos'],
+                                 ADAPTIVE_VEL_THRESHOLD_POS, ADAPTIVE_NOISE_MULTIPLIER),
+        'y':     KalmanFilter1D(params['proc_pos'], params['meas_pos'],
+                                 ADAPTIVE_VEL_THRESHOLD_POS, ADAPTIVE_NOISE_MULTIPLIER),
+        'z':     KalmanFilter1D(params['proc_pos'], params['meas_pos'],
+                                 ADAPTIVE_VEL_THRESHOLD_POS, ADAPTIVE_NOISE_MULTIPLIER),
     }
 
 
