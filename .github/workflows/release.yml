@@ -26,9 +26,9 @@ jobs:
         run: pyinstaller off_axis_tracker.spec --clean --noconfirm
 
       - name: Zip output
-        run: Compress-Archive -Path dist\OffAxisTracker\* -DestinationPath OffAxisTracker-${{ github.ref_name }}.zip
+        run: Compress-Archive -Path dist\OffAxisTracker\* -DestinationPath OffAxisTracker.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: OffAxisTracker-${{ github.ref_name }}.zip
+          files: OffAxisTracker.zip
