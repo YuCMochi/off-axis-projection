@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python -m pytest tests/test_config.py -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_tracker_utils.py -v)",
+      "Bash(.venv/Scripts/python -c ':*)",
+      "Bash(.venv/Scripts/pip show:*)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(python -c ':*)",
+      "Bash(.venv/Scripts/pyinstaller off_axis_tracker.spec --clean --noconfirm)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -v)"
+    ]
+  }
+}
