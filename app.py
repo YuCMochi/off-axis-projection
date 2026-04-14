@@ -49,11 +49,11 @@ class MainWindow:
 
         self._hud_rot = ttk.Label(hud_frame,
                                    text="Yaw:  +0.0   Pitch:  +0.0   Roll:  +0.0 deg",
-                                   font=("Consolas", 10), foreground="#4fc")
+                                   font=("Consolas", 10), foreground="#0077ff")
         self._hud_rot.pack(anchor="w")
         self._hud_pos = ttk.Label(hud_frame,
                                    text="X: +0.0   Y: +0.0   Z: +0.0  cm",
-                                   font=("Consolas", 10), foreground="#4cf")
+                                   font=("Consolas", 10), foreground="#ff45ff")
         self._hud_pos.pack(anchor="w")
 
         ttk.Separator(self.root, orient="horizontal").pack(fill="x", padx=10)
@@ -62,10 +62,10 @@ class MainWindow:
         btn_frame = ttk.Frame(self.root)
         btn_frame.pack(fill="x", **pad)
 
-        self._start_btn = ttk.Button(btn_frame, text="Start", width=18,
+        self._start_btn = ttk.Button(btn_frame, text="Start 開始", width=18,
                                       command=self._toggle_tracker)
         self._start_btn.pack(side="left", padx=(0, 6))
-        ttk.Button(btn_frame, text="Settings", width=18,
+        ttk.Button(btn_frame, text="Settings 設定", width=18,
                    command=self._open_settings).pack(side="left")
 
         # ── Error label (hidden by default) ──────────────────────────────────

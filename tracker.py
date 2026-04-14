@@ -351,6 +351,6 @@ class FaceTracker:
         cv2.line(frame, o, tuple(ap[1].ravel().astype(int)), (0, 255, 0), 2)
         cv2.line(frame, o, tuple(ap[2].ravel().astype(int)), (255, 0, 0), 2)
         cv2.putText(frame, f"Yaw:{yaw:+6.1f}  Pitch:{pitch:+6.1f}  Roll:{roll:+6.1f} deg",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 119, 0), 2)
         cv2.putText(frame, f"X:{tx:+6.1f}  Y:{ty:+6.1f}  Z:{tz:+6.1f} cm",
-                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
+                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 69, 255), 2)
