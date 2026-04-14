@@ -6,14 +6,11 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 mp_datas   = collect_data_files("mediapipe")
 cv2_datas  = collect_data_files("cv2")
 
-# Include face_landmarker.task from project root (bundled into _internal/)
-extra_datas = [("face_landmarker.task", ".")]
-
 a = Analysis(
     ["app.py"],
     pathex=[],
     binaries=collect_dynamic_libs("mediapipe"),
-    datas=mp_datas + cv2_datas + extra_datas,
+    datas=mp_datas + cv2_datas,
     hiddenimports=[
         "mediapipe",
         "mediapipe.python",
