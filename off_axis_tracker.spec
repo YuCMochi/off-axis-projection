@@ -10,7 +10,7 @@ a = Analysis(
     ["app.py"],
     pathex=[],
     binaries=collect_dynamic_libs("mediapipe"),
-    datas=mp_datas + cv2_datas,
+    datas=mp_datas + cv2_datas + [('face_landmarker.task', '.')],
     hiddenimports=[
         "mediapipe",
         "mediapipe.python",
