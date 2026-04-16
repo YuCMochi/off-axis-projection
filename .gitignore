@@ -1,5 +1,8 @@
 dist/
 build/
+app.build/
+app.exe
+app.cmd
 __pycache__/
 *.pyc
 *.pyo
