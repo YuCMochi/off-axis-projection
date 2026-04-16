@@ -8,7 +8,13 @@
       "Bash(.venv/Scripts/pip install:*)",
       "Bash(python -c ':*)",
       "Bash(.venv/Scripts/pyinstaller off_axis_tracker.spec --clean --noconfirm)",
-      "Bash(.venv/Scripts/python -m pytest tests/ -v)"
+      "Bash(.venv/Scripts/python -m pytest tests/ -v)",
+      "Bash(\"c:/Users/0/Desktop/my projects/off-axis-projection/.venv/Scripts/python.exe\" --version)",
+      "Bash(python -c \"import zipfile; z = zipfile.ZipFile\\('c:/Users/0/Desktop/my projects/off-axis-projection/dist/OffAxisTracker/_internal/base_library.zip'\\); names = [n for n in z.namelist\\(\\) if 'solution_base' in n or \\('mediapipe' in n and 'python' in n and n.endswith\\('.pyc'\\)\\)]; print\\(names[:20]\\)\")",
+      "Bash(python -c \" import subprocess, sys result = subprocess.run\\( ['strings', 'c:/Users/0/Desktop/my projects/off-axis-projection/.venv/Lib/site-packages/mediapipe/python/_framework_bindings.cp311-win_amd64.pyd'], capture_output=True, text=True \\) for line in result.stdout.split\\('\\\\n'\\): if 'does not exist' in line.lower\\(\\) or 'path' in line.lower\\(\\): print\\(line\\) \")",
+      "Bash(.venv/Scripts/python.exe -c \" import re bpb = '.venv/Lib/site-packages/mediapipe/modules/face_detection/face_detection_short_range_cpu.binarypb' data = open\\(bpb, 'rb'\\).read\\(\\) print\\('hex sample:', data[:200].hex\\(\\)\\) print\\('len:', len\\(data\\)\\) strings = [] i = 0 while i < len\\(data\\): if 32 <= data[i] <= 126: j = i while j < len\\(data\\) and 32 <= data[j] <= 126: j += 1 if j - i >= 5: strings.append\\(data[i:j].decode\\('latin1'\\)\\) i = j else: i += 1 for s in strings: print\\(repr\\(s\\)\\) \")",
+      "WebFetch(domain:dev.epicgames.com)",
+      "WebSearch"
     ]
   }
 }
