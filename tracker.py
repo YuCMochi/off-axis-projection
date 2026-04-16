@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import math
+import os
 import socket
 import struct
+import sys
 import threading
+from pathlib import Path
 from typing import Optional
 
 import cv2
@@ -12,6 +15,68 @@ import mediapipe as mp
 import numpy as np
 
 from config import Config
+
+# ── Windows non-ASCII path fix for frozen exe (issue #1) ────────────────────
+_mediapipe_path_patched = False
+
+def _patch_mediapipe_resource_dir() -> None:
+    """On frozen Windows exe with a non-ASCII install path: create an ASCII
+    directory junction in %TEMP% that points to _internal, then redirect
+    solution_base.__file__ through it.  mediapipe's C++ backend then receives
+    ASCII-only paths for set_resource_dir AND ValidatedGraphConfig.initialize,
+    so it can open its .binarypb model files successfully (issue #1)."""
+    global _mediapipe_path_patched
+    if _mediapipe_path_patched or not getattr(sys, "frozen", False) or sys.platform != "win32":
+        return
+
+    import mediapipe.python.solution_base as _sb
+
+    # If __file__ is already ASCII, nothing to do.
+    try:
+        _sb.__file__.encode("ascii")
+        _mediapipe_path_patched = True
+        return
+    except UnicodeEncodeError:
+        pass
+
+    # _internal dir is 3 levels above solution_base.py
+    # (solution_base.py → python\ → mediapipe\ → _internal\)
+    internal_dir = str(Path(_sb.__file__).parents[2])
+
+    # Pick an ASCII junction location inside %TEMP%
+    temp_base = os.environ.get("TEMP") or os.environ.get("TMP") or "C:\\Temp"
+    try:
+        temp_base.encode("ascii")
+    except UnicodeEncodeError:
+        temp_base = "C:\\Temp"
+        os.makedirs(temp_base, exist_ok=True)
+    junction = os.path.join(temp_base, "offaxis_mp_res")
+
+    # Create (or recreate) the junction.
+    # Verify an existing junction still resolves correctly; if not, remove it.
+    import subprocess
+
+    if os.path.isdir(junction):
+        probe = os.path.join(junction, "mediapipe", "python", "solution_base.py")
+        if not os.path.isfile(probe):
+            subprocess.run(["cmd", "/c", "rmdir", junction],
+                           capture_output=True, creationflags=0x08000000)
+
+    if not os.path.isdir(junction):
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", junction, internal_dir],
+            capture_output=True,
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
+        )
+        if result.returncode != 0 or not os.path.isdir(junction):
+            return
+
+    # Redirect solution_base.__file__ through the ASCII junction so that
+    # SolutionBase.__init__'s root_path is also ASCII.
+    rel = os.path.relpath(_sb.__file__, internal_dir)
+    _sb.__file__ = os.path.join(junction, rel)
+
+    _mediapipe_path_patched = True
 
 # ── Face mesh landmark indices ──────────────────────────────────────────────
 LM_NOSE_TIP    = 4
@@ -163,6 +228,7 @@ class FaceTracker:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open camera #{cfg.cam_index}")
 
+        _patch_mediapipe_resource_dir()
         mp_mesh = mp.solutions.face_mesh
         face_mesh = mp_mesh.FaceMesh(
             max_num_faces=cfg.max_num_faces,
