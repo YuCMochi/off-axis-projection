@@ -1,6 +1,6 @@
 @echo off
 echo Building Off-Axis Face Tracker...
-.venv\Scripts\pyinstaller off_axis_tracker.spec --clean --noconfirm
+.venv\Scripts\python -m nuitka app.py
 echo.
-echo Done. Output: dist\OffAxisTracker\OffAxisTracker.exe
+echo Done. Output: dist\app.dist\OffAxisTracker.exe
 pause
