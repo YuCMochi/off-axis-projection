@@ -78,11 +78,11 @@ class MainWindow:
     def _toggle_tracker(self) -> None:
         if self._tracker.running:
             self._tracker.stop()
-            self._start_btn.config(text="Start")
+            self._start_btn.config(text="Start 開始")
         else:
             self._tracker = FaceTracker(self._cfg)
             self._tracker.start(preview=True)
-            self._start_btn.config(text="Stop")
+            self._start_btn.config(text="Stop 終止")
 
     def _open_settings(self) -> None:
         if self._settings_win and self._settings_win.winfo_exists():
