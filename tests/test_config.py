@@ -1,6 +1,4 @@
 import json
-import pytest
-from pathlib import Path
 
 
 def test_config_defaults(tmp_path, monkeypatch):
