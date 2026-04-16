@@ -1,4 +1,3 @@
-import math
 import struct
 import numpy as np
 import pytest

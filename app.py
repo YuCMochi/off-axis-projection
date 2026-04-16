@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 
-from config import Config, load_config, save_config
+from config import Config, load_config
 from tracker import FaceTracker
 from settings_window import SettingsWindow
 
