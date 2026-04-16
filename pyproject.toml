@@ -1,0 +1,8 @@
+[tool.nuitka]
+standalone = true
+enable-plugin = ["numpy", "tk-inter"]
+include-package = ["mediapipe", "cv2"]
+include-package-data = ["mediapipe", "cv2"]
+windows-disable-console = true
+output-filename = "OffAxisTracker"
+output-dir = "dist"
