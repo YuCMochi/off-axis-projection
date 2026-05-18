@@ -4,7 +4,7 @@ import pytest
 
 
 def test_pack_opentrack_format():
-    from tracker import pack_opentrack
+    from sender import pack_opentrack
     data = pack_opentrack(1.0, 2.0, 3.0, 10.0, 20.0, 30.0)
     assert len(data) == 48
     unpacked = struct.unpack("<6d", data)
