@@ -305,9 +305,11 @@ class FaceTracker:
                         if cfg.output_protocol == "freed":
                             data = sender.pack_freed(tx, ty, tz, yaw, pitch, roll)
                             sender.send(sock, cfg.freed_host, cfg.freed_port, data)
-                        else:
+                        elif cfg.output_protocol == "opentrack":
                             data = sender.pack_opentrack(tx, ty, tz, yaw, pitch, roll)
                             sender.send(sock, cfg.udp_host, cfg.udp_port, data)
+                        else:
+                            raise ValueError(f"Unknown output_protocol: {cfg.output_protocol!r}")
 
                         self.live.update({
                             "yaw": yaw, "pitch": pitch, "roll": roll,
