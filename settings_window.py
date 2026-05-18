@@ -87,8 +87,8 @@ class SettingsWindow(tk.Toplevel):
 
         # FreeD Host
         r += 1
-        ttk.Label(parent, text="FreeD Host", width=20, anchor="e").grid(
-            row=r, column=0, padx=6, pady=4)
+        freed_host_lbl = ttk.Label(parent, text="FreeD Host", width=20, anchor="e")
+        freed_host_lbl.grid(row=r, column=0, padx=6, pady=4)
         freed_host_var = tk.StringVar(value=cfg.freed_host)
         self._vars["freed_host"] = freed_host_var
         freed_host_entry = ttk.Entry(parent, textvariable=freed_host_var, width=18)
@@ -96,8 +96,8 @@ class SettingsWindow(tk.Toplevel):
 
         # FreeD Port
         r += 1
-        ttk.Label(parent, text="FreeD Port", width=20, anchor="e").grid(
-            row=r, column=0, padx=6, pady=4)
+        freed_port_lbl = ttk.Label(parent, text="FreeD Port", width=20, anchor="e")
+        freed_port_lbl.grid(row=r, column=0, padx=6, pady=4)
         freed_port_var = tk.IntVar(value=cfg.freed_port)
         self._vars["freed_port"] = freed_port_var
         freed_port_spin = ttk.Spinbox(
@@ -107,9 +107,13 @@ class SettingsWindow(tk.Toplevel):
         freed_port_spin.grid(row=r, column=1, sticky="w", padx=6)
 
         def _toggle_freed_fields(*_):
-            state = "normal" if proto_var.get() == "freed" else "disabled"
+            active = proto_var.get() == "freed"
+            state = "normal" if active else "disabled"
+            fg = "" if active else "gray"
             freed_host_entry.config(state=state)
             freed_port_spin.config(state=state)
+            freed_host_lbl.config(foreground=fg)
+            freed_port_lbl.config(foreground=fg)
 
         proto_var.trace_add("write", _toggle_freed_fields)
         _toggle_freed_fields()
