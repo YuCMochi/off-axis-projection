@@ -39,3 +39,23 @@ def test_config_load_extra_keys_ignored(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_PATH", path)
     cfg = config.load_config()
     assert cfg.cam_index == 1
+
+
+def test_config_freed_defaults(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+    cfg = config.load_config()
+    assert cfg.output_protocol == "freed"
+    assert cfg.freed_host == "127.0.0.1"
+    assert cfg.freed_port == 40000
+
+
+def test_config_freed_roundtrip(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+    original = config.Config(output_protocol="opentrack", freed_host="192.168.1.5", freed_port=9000)
+    config.save_config(original)
+    loaded = config.load_config()
+    assert loaded.output_protocol == "opentrack"
+    assert loaded.freed_host == "192.168.1.5"
+    assert loaded.freed_port == 9000
