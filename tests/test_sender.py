@@ -53,3 +53,11 @@ def test_pack_freed_clamps_underflow_without_raising():
     data = pack_freed(-99999, -99999, -99999, -999, -999, -999)
     assert len(data) == 29
     assert sum(data) % 256 == 0
+
+
+def test_send_calls_sendto():
+    from unittest.mock import Mock
+    from sender import send
+    sock = Mock()
+    send(sock, "127.0.0.1", 4242, b"\x00")
+    sock.sendto.assert_called_once_with(b"\x00", ("127.0.0.1", 4242))

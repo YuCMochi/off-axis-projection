@@ -10,7 +10,7 @@ def pack_opentrack(x, y, z, yaw, pitch, roll) -> bytes:
 
 
 def _to_24bit(value: float) -> bytes:
-    val_int = int(value)
+    val_int = round(value)
     val_int = max(-8388608, min(8388607, val_int))
     return val_int.to_bytes(3, byteorder="big", signed=True)
 
