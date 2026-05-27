@@ -63,3 +63,24 @@ def test_config_old_udp_keys_ignored(tmp_path, monkeypatch):
     assert cfg.cam_index == 3
     assert cfg.host == "127.0.0.1"   # old keys ignored, falls back to default
     assert cfg.port == 40000
+
+
+def test_config_invalid_protocol_falls_back_to_freed(tmp_path, monkeypatch):
+    """Unknown output_protocol in config.json is replaced with 'freed' instead of crashing."""
+    import config
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"output_protocol": "livelink"}), encoding="utf-8")
+    monkeypatch.setattr(config, "CONFIG_PATH", path)
+    cfg = config.load_config()
+    assert cfg.output_protocol == "freed"
+
+
+def test_config_valid_protocols_accepted(tmp_path, monkeypatch):
+    """Valid output_protocol values are loaded without modification."""
+    import config
+    for proto in ("freed", "opentrack"):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"output_protocol": proto}), encoding="utf-8")
+        monkeypatch.setattr(config, "CONFIG_PATH", path)
+        cfg = config.load_config()
+        assert cfg.output_protocol == proto

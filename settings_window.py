@@ -147,11 +147,19 @@ class SettingsWindow(tk.Toplevel):
         )
 
     def _apply(self) -> None:
-        cfg = self._collect()
+        try:
+            cfg = self._collect()
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showerror("Invalid input", f"請確認輸入值正確 / Invalid value:\n{exc}", parent=self)
+            return
         self._on_apply(cfg)
 
     def _save(self) -> None:
-        cfg = self._collect()
+        try:
+            cfg = self._collect()
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showerror("Invalid input", f"請確認輸入值正確 / Invalid value:\n{exc}", parent=self)
+            return
         save_config(cfg)
         self._on_apply(cfg)
         messagebox.showinfo("Saved", "設定已儲存 / Settings saved to config.json", parent=self)

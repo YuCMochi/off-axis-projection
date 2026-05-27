@@ -16,6 +16,7 @@ CONFIG_PATH = _APP_DIR / "config.json"
 
 DEFAULT_HOST: str = "127.0.0.1"
 DEFAULT_PORTS: dict[str, int] = {"freed": 40000, "opentrack": 4242}
+VALID_PROTOCOLS: frozenset[str] = frozenset(DEFAULT_PORTS.keys())
 
 
 @dataclass
@@ -51,7 +52,14 @@ def load_config() -> Config:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             fields = Config.__dataclass_fields__
             filtered = {k: v for k, v in data.items() if k in fields}
-            return Config(**filtered)
+            cfg = Config(**filtered)
+            if cfg.output_protocol not in VALID_PROTOCOLS:
+                print(
+                    f"[config] Invalid output_protocol {cfg.output_protocol!r}; "
+                    f"falling back to 'freed'."
+                )
+                cfg.output_protocol = "freed"
+            return cfg
         except Exception:
             pass
     return Config()
