@@ -32,9 +32,9 @@ jobs:
         run: python -m nuitka app.py --standalone --enable-plugin=tk-inter --include-package=mediapipe --include-package=cv2 --include-package-data=mediapipe --include-package-data=cv2 --windows-console-mode=disable --output-filename=OffAxisTracker --output-dir=dist --assume-yes-for-downloads
 
       - name: Zip output
-        run: Compress-Archive -Path dist\app.dist\* -DestinationPath OffAxisTracker.zip
+        run: Compress-Archive -Path dist\app.dist\* -DestinationPath OffAxisTracker-${{ github.ref_name }}.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: OffAxisTracker.zip
+          files: OffAxisTracker-${{ github.ref_name }}.zip
