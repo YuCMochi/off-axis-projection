@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Callable
 
-from config import Config, save_config
+from config import Config, save_config, DEFAULT_HOST, DEFAULT_PORTS
 
 
 class SettingsWindow(tk.Toplevel):
@@ -53,19 +53,20 @@ class SettingsWindow(tk.Toplevel):
         for r, (key, label, kind, lo, hi, res, default) in enumerate(rows):
             self._add_slider_row(parent, r, key, label, kind, lo, hi, res, default)
 
-        # UDP Host — text entry
+        # Host — text entry
         r = len(rows)
-        ttk.Label(parent, text="UDP Host", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
-        var = tk.StringVar(value=cfg.udp_host)
-        self._vars["udp_host"] = var
-        ttk.Entry(parent, textvariable=var, width=18).grid(row=r, column=1, columnspan=2, sticky="w", padx=6)
+        ttk.Label(parent, text="Host", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
+        host_var = tk.StringVar(value=cfg.host)
+        self._vars["host"] = host_var
+        ttk.Entry(parent, textvariable=host_var, width=18).grid(
+            row=r, column=1, columnspan=2, sticky="w", padx=6)
 
-        # UDP Port — spinbox
+        # Port — spinbox
         r += 1
-        ttk.Label(parent, text="UDP Port", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
-        var2 = tk.IntVar(value=cfg.udp_port)
-        self._vars["udp_port"] = var2
-        ttk.Spinbox(parent, from_=1024, to=65535, textvariable=var2, width=7).grid(
+        ttk.Label(parent, text="Port", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
+        port_var = tk.IntVar(value=cfg.port)
+        self._vars["port"] = port_var
+        ttk.Spinbox(parent, from_=1024, to=65535, textvariable=port_var, width=7).grid(
             row=r, column=1, sticky="w", padx=6)
 
         # Output Protocol — dropdown
@@ -78,45 +79,17 @@ class SettingsWindow(tk.Toplevel):
             row=r, column=0, padx=6, pady=4)
         proto_var = tk.StringVar(value=cfg.output_protocol)
         self._vars["output_protocol"] = proto_var
-        proto_combo = ttk.Combobox(
+        ttk.Combobox(
             parent, textvariable=proto_var,
             values=["freed", "opentrack"],
             state="readonly", width=15,
-        )
-        proto_combo.grid(row=r, column=1, sticky="w", padx=6)
+        ).grid(row=r, column=1, sticky="w", padx=6)
 
-        # FreeD Host
-        r += 1
-        freed_host_lbl = ttk.Label(parent, text="FreeD Host", width=20, anchor="e")
-        freed_host_lbl.grid(row=r, column=0, padx=6, pady=4)
-        freed_host_var = tk.StringVar(value=cfg.freed_host)
-        self._vars["freed_host"] = freed_host_var
-        freed_host_entry = ttk.Entry(parent, textvariable=freed_host_var, width=18)
-        freed_host_entry.grid(row=r, column=1, columnspan=2, sticky="w", padx=6)
+        def _on_protocol_change(*_):
+            host_var.set(DEFAULT_HOST)
+            port_var.set(DEFAULT_PORTS[proto_var.get()])
 
-        # FreeD Port
-        r += 1
-        freed_port_lbl = ttk.Label(parent, text="FreeD Port", width=20, anchor="e")
-        freed_port_lbl.grid(row=r, column=0, padx=6, pady=4)
-        freed_port_var = tk.IntVar(value=cfg.freed_port)
-        self._vars["freed_port"] = freed_port_var
-        freed_port_spin = ttk.Spinbox(
-            parent, from_=1024, to=65535,
-            textvariable=freed_port_var, width=7,
-        )
-        freed_port_spin.grid(row=r, column=1, sticky="w", padx=6)
-
-        def _toggle_freed_fields(*_):
-            active = proto_var.get() == "freed"
-            state = "normal" if active else "disabled"
-            fg = "" if active else "gray"
-            freed_host_entry.config(state=state)
-            freed_port_spin.config(state=state)
-            freed_host_lbl.config(foreground=fg)
-            freed_port_lbl.config(foreground=fg)
-
-        proto_var.trace_add("write", _toggle_freed_fields)
-        _toggle_freed_fields()
+        proto_var.trace_add("write", _on_protocol_change)
 
     def _build_tune_tab(self, parent: ttk.Frame, cfg: Config) -> None:
         rows = [
@@ -158,11 +131,9 @@ class SettingsWindow(tk.Toplevel):
             lock_snap_dist_px = int(v["lock_snap_dist_px"].get()),
             cam_offset_x_cm   = float(v["cam_offset_x_cm"].get()),
             cam_offset_y_cm   = float(v["cam_offset_y_cm"].get()),
-            udp_host          = v["udp_host"].get().strip(),
-            udp_port          = int(v["udp_port"].get()),
             output_protocol   = v["output_protocol"].get(),
-            freed_host        = v["freed_host"].get().strip(),
-            freed_port        = int(v["freed_port"].get()),
+            host              = v["host"].get().strip(),
+            port              = int(v["port"].get()),
             real_eye_dist_cm  = float(v["real_eye_dist_cm"].get()),
             smooth_alpha      = float(v["smooth_alpha"].get()),
             deadzone_rot      = float(v["deadzone_rot"].get()),
