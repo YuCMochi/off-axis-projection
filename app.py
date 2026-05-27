@@ -37,7 +37,7 @@ class MainWindow:
         self._status_lbl = ttk.Label(status_frame, text="待機 / Idle", font=("Consolas", 11))
         self._status_lbl.pack(side="left", padx=6)
         self._cam_lbl = ttk.Label(status_frame,
-                                   text=f"Cam #{self._cfg.cam_index}  ->  {self._cfg.udp_host}:{self._cfg.udp_port}",
+                                   text=f"Cam #{self._cfg.cam_index}  ->  {self._cfg.host}:{self._cfg.port}  [{self._cfg.output_protocol}]",
                                    font=("Consolas", 9), foreground="#888")
         self._cam_lbl.pack(side="right")
 
@@ -103,7 +103,7 @@ class MainWindow:
             self._tracker.start(preview=True)
         # Update info label
         self._cam_lbl.config(
-            text=f"Cam #{self._cfg.cam_index}  ->  {self._cfg.udp_host}:{self._cfg.udp_port}"
+            text=f"Cam #{new_cfg.cam_index}  ->  {new_cfg.host}:{new_cfg.port}  [{new_cfg.output_protocol}]"
         )
 
     # ── Polling ───────────────────────────────────────────────────────────────

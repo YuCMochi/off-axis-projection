@@ -4,7 +4,6 @@ from __future__ import annotations
 import math
 import os
 import socket
-import struct
 import sys
 import threading
 from pathlib import Path
@@ -15,6 +14,7 @@ import mediapipe as mp
 import numpy as np
 
 from config import Config
+import sender
 
 # ── Windows non-ASCII path fix for frozen exe (issue #1) ────────────────────
 _mediapipe_path_patched = False
@@ -106,10 +106,6 @@ DEBUG_PRINT_INTERVAL   = 30
 
 
 # ── Utility functions (module-level so tests can import them) ────────────────
-
-def pack_opentrack(x, y, z, yaw, pitch, roll) -> bytes:
-    return struct.pack("<6d", x, y, z, yaw, pitch, roll)
-
 
 def get_cam_matrix(w: int, h: int, focal_px: float) -> np.ndarray:
     return np.array([[focal_px, 0, w / 2],
@@ -306,8 +302,13 @@ class FaceTracker:
                         ty    = f_y.update(ty)
                         tz    = f_z.update(tz)
 
-                        packet = pack_opentrack(tx, ty, tz, yaw, pitch, roll)
-                        sock.sendto(packet, (cfg.udp_host, cfg.udp_port))
+                        if cfg.output_protocol == "freed":
+                            data = sender.pack_freed(tx, ty, tz, yaw, pitch, roll)
+                        elif cfg.output_protocol == "opentrack":
+                            data = sender.pack_opentrack(tx, ty, tz, yaw, pitch, roll)
+                        else:
+                            raise ValueError(f"Unknown output_protocol: {cfg.output_protocol!r}")
+                        sender.send(sock, cfg.host, cfg.port, data)
 
                         self.live.update({
                             "yaw": yaw, "pitch": pitch, "roll": roll,

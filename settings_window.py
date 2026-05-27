@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Callable
 
-from config import Config, save_config
+from config import Config, save_config, DEFAULT_HOST, DEFAULT_PORTS
 
 
 class SettingsWindow(tk.Toplevel):
@@ -53,20 +53,43 @@ class SettingsWindow(tk.Toplevel):
         for r, (key, label, kind, lo, hi, res, default) in enumerate(rows):
             self._add_slider_row(parent, r, key, label, kind, lo, hi, res, default)
 
-        # UDP Host — text entry
+        # Host — text entry
         r = len(rows)
-        ttk.Label(parent, text="UDP Host", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
-        var = tk.StringVar(value=cfg.udp_host)
-        self._vars["udp_host"] = var
-        ttk.Entry(parent, textvariable=var, width=18).grid(row=r, column=1, columnspan=2, sticky="w", padx=6)
+        ttk.Label(parent, text="Host", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
+        host_var = tk.StringVar(value=cfg.host)
+        self._vars["host"] = host_var
+        ttk.Entry(parent, textvariable=host_var, width=18).grid(
+            row=r, column=1, columnspan=2, sticky="w", padx=6)
 
-        # UDP Port — spinbox
+        # Port — spinbox
         r += 1
-        ttk.Label(parent, text="UDP Port", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
-        var2 = tk.IntVar(value=cfg.udp_port)
-        self._vars["udp_port"] = var2
-        ttk.Spinbox(parent, from_=1024, to=65535, textvariable=var2, width=7).grid(
+        ttk.Label(parent, text="Port", width=20, anchor="e").grid(row=r, column=0, padx=6, pady=4)
+        port_var = tk.IntVar(value=cfg.port)
+        self._vars["port"] = port_var
+        ttk.Spinbox(parent, from_=1024, to=65535, textvariable=port_var, width=7).grid(
             row=r, column=1, sticky="w", padx=6)
+
+        # Output Protocol — dropdown
+        r += 1
+        ttk.Separator(parent, orient="horizontal").grid(
+            row=r, column=0, columnspan=3, sticky="ew", padx=6, pady=6)
+
+        r += 1
+        ttk.Label(parent, text="Output Protocol", width=20, anchor="e").grid(
+            row=r, column=0, padx=6, pady=4)
+        proto_var = tk.StringVar(value=cfg.output_protocol)
+        self._vars["output_protocol"] = proto_var
+        ttk.Combobox(
+            parent, textvariable=proto_var,
+            values=["freed", "opentrack"],
+            state="readonly", width=15,
+        ).grid(row=r, column=1, sticky="w", padx=6)
+
+        def _on_protocol_change(*_):
+            host_var.set(DEFAULT_HOST)
+            port_var.set(DEFAULT_PORTS[proto_var.get()])
+
+        proto_var.trace_add("write", _on_protocol_change)
 
     def _build_tune_tab(self, parent: ttk.Frame, cfg: Config) -> None:
         rows = [
@@ -108,8 +131,9 @@ class SettingsWindow(tk.Toplevel):
             lock_snap_dist_px = int(v["lock_snap_dist_px"].get()),
             cam_offset_x_cm   = float(v["cam_offset_x_cm"].get()),
             cam_offset_y_cm   = float(v["cam_offset_y_cm"].get()),
-            udp_host          = v["udp_host"].get().strip(),
-            udp_port          = int(v["udp_port"].get()),
+            output_protocol   = v["output_protocol"].get(),
+            host              = v["host"].get().strip(),
+            port              = int(v["port"].get()),
             real_eye_dist_cm  = float(v["real_eye_dist_cm"].get()),
             smooth_alpha      = float(v["smooth_alpha"].get()),
             deadzone_rot      = float(v["deadzone_rot"].get()),
@@ -123,11 +147,19 @@ class SettingsWindow(tk.Toplevel):
         )
 
     def _apply(self) -> None:
-        cfg = self._collect()
+        try:
+            cfg = self._collect()
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showerror("Invalid input", f"請確認輸入值正確 / Invalid value:\n{exc}", parent=self)
+            return
         self._on_apply(cfg)
 
     def _save(self) -> None:
-        cfg = self._collect()
+        try:
+            cfg = self._collect()
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showerror("Invalid input", f"請確認輸入值正確 / Invalid value:\n{exc}", parent=self)
+            return
         save_config(cfg)
         self._on_apply(cfg)
         messagebox.showinfo("Saved", "設定已儲存 / Settings saved to config.json", parent=self)
