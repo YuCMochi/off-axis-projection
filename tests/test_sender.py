@@ -1,5 +1,4 @@
 import struct
-import pytest
 
 
 def test_pack_opentrack_length_and_values():
