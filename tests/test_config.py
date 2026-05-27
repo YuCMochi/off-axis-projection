@@ -6,19 +6,27 @@ def test_config_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
     cfg = config.load_config()
     assert cfg.cam_index == 0
-    assert cfg.udp_host == "127.0.0.1"
-    assert cfg.udp_port == 4242
+    assert cfg.host == "127.0.0.1"
+    assert cfg.port == 40000
+    assert cfg.output_protocol == "freed"
     assert cfg.smooth_alpha == 0.25
+
+
+def test_config_default_constants():
+    from config import DEFAULT_HOST, DEFAULT_PORTS
+    assert DEFAULT_HOST == "127.0.0.1"
+    assert DEFAULT_PORTS["freed"] == 40000
+    assert DEFAULT_PORTS["opentrack"] == 4242
 
 
 def test_config_roundtrip(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
-    original = config.Config(cam_index=2, udp_port=9000, smooth_alpha=0.1, cam_offset_y_cm=20.0)
+    original = config.Config(cam_index=2, port=9000, smooth_alpha=0.1, cam_offset_y_cm=20.0)
     config.save_config(original)
     loaded = config.load_config()
     assert loaded.cam_index == 2
-    assert loaded.udp_port == 9000
+    assert loaded.port == 9000
     assert loaded.smooth_alpha == 0.1
     assert loaded.cam_offset_y_cm == 20.0
 
@@ -41,21 +49,17 @@ def test_config_load_extra_keys_ignored(tmp_path, monkeypatch):
     assert cfg.cam_index == 1
 
 
-def test_config_freed_defaults(tmp_path, monkeypatch):
+def test_config_old_udp_keys_ignored(tmp_path, monkeypatch):
+    """Old configs with udp_host/udp_port/freed_host/freed_port are silently ignored."""
     import config
-    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({
+        "udp_host": "192.168.1.1", "udp_port": 4242,
+        "freed_host": "10.0.0.1", "freed_port": 40000,
+        "cam_index": 3,
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CONFIG_PATH", path)
     cfg = config.load_config()
-    assert cfg.output_protocol == "freed"
-    assert cfg.freed_host == "127.0.0.1"
-    assert cfg.freed_port == 40000
-
-
-def test_config_freed_roundtrip(tmp_path, monkeypatch):
-    import config
-    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.json")
-    original = config.Config(output_protocol="opentrack", freed_host="192.168.1.5", freed_port=9000)
-    config.save_config(original)
-    loaded = config.load_config()
-    assert loaded.output_protocol == "opentrack"
-    assert loaded.freed_host == "192.168.1.5"
-    assert loaded.freed_port == 9000
+    assert cfg.cam_index == 3
+    assert cfg.host == "127.0.0.1"   # old keys ignored, falls back to default
+    assert cfg.port == 40000

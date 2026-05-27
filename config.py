@@ -14,6 +14,9 @@ else:
 
 CONFIG_PATH = _APP_DIR / "config.json"
 
+DEFAULT_HOST: str = "127.0.0.1"
+DEFAULT_PORTS: dict[str, int] = {"freed": 40000, "opentrack": 4242}
+
 
 @dataclass
 class Config:
@@ -24,12 +27,10 @@ class Config:
     lock_snap_dist_px: int = 150
     cam_offset_x_cm: float = 0.0
     cam_offset_y_cm: float = 16.2
-    udp_host: str = "127.0.0.1"
-    udp_port: int = 4242
     # ── Output Protocol ──────────────────────────────────────────────────────
     output_protocol: str = "freed"       # "freed" | "opentrack"
-    freed_host: str = "127.0.0.1"
-    freed_port: int = 40000
+    host: str = "127.0.0.1"
+    port: int = 40000
     real_eye_dist_cm: float = 9.0
     # ── Tuning Parameters ────────────────────────────────────────────────────
     smooth_alpha: float = 0.25
