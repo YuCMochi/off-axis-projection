@@ -36,9 +36,8 @@ class MainWindow:
         self._status_dot.pack(side="left")
         self._status_lbl = ttk.Label(status_frame, text="待機 / Idle", font=("Consolas", 11))
         self._status_lbl.pack(side="left", padx=6)
-        _h, _p = self._endpoint_str(self._cfg)
         self._cam_lbl = ttk.Label(status_frame,
-                                   text=f"Cam #{self._cfg.cam_index}  ->  {_h}:{_p}  [{self._cfg.output_protocol}]",
+                                   text=f"Cam #{self._cfg.cam_index}  ->  {self._cfg.host}:{self._cfg.port}  [{self._cfg.output_protocol}]",
                                    font=("Consolas", 9), foreground="#888")
         self._cam_lbl.pack(side="right")
 
@@ -76,12 +75,6 @@ class MainWindow:
 
     # ── Tracker control ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def _endpoint_str(cfg) -> tuple:
-        if cfg.output_protocol == "freed":
-            return cfg.freed_host, cfg.freed_port
-        return cfg.udp_host, cfg.udp_port
-
     def _toggle_tracker(self) -> None:
         if self._tracker.running:
             self._tracker.stop()
@@ -109,9 +102,8 @@ class MainWindow:
         if was_running:
             self._tracker.start(preview=True)
         # Update info label
-        host, port = self._endpoint_str(new_cfg)
         self._cam_lbl.config(
-            text=f"Cam #{new_cfg.cam_index}  ->  {host}:{port}  [{new_cfg.output_protocol}]"
+            text=f"Cam #{new_cfg.cam_index}  ->  {new_cfg.host}:{new_cfg.port}  [{new_cfg.output_protocol}]"
         )
 
     # ── Polling ───────────────────────────────────────────────────────────────
