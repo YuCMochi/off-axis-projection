@@ -59,3 +59,18 @@ def test_rot_to_euler_identity():
     assert x == pytest.approx(0.0, abs=1e-9)
     assert y == pytest.approx(0.0, abs=1e-9)
     assert z == pytest.approx(0.0, abs=1e-9)
+
+
+def test_config_has_cam_hfov_deg():
+    from config import Config
+    cfg = Config()
+    assert cfg.cam_hfov_deg == pytest.approx(70.0)
+    assert not hasattr(cfg, "focal_length_px")
+    assert not hasattr(cfg, "real_eye_dist_cm")
+
+
+def test_hfov_to_focal_90deg():
+    import math
+    # 90° HFOV on 640-wide image → focal = 320.0 (tan 45° = 1.0)
+    focal = (640 / 2.0) / math.tan(math.radians(90.0 / 2.0))
+    assert focal == pytest.approx(320.0, rel=1e-6)

@@ -23,7 +23,7 @@ VALID_PROTOCOLS: frozenset[str] = frozenset(DEFAULT_PORTS.keys())
 class Config:
     # ── Environment Profile ──────────────────────────────────────────────────
     cam_index: int = 0
-    focal_length_px: float = 320.0
+    cam_hfov_deg: float = 70.0
     max_num_faces: int = 5
     lock_snap_dist_px: int = 150
     cam_offset_x_cm: float = 0.0
@@ -32,7 +32,6 @@ class Config:
     output_protocol: str = "freed"       # "freed" | "opentrack"
     host: str = "127.0.0.1"
     port: int = 40000
-    real_eye_dist_cm: float = 9.0
     # ── Tuning Parameters ────────────────────────────────────────────────────
     smooth_alpha: float = 0.25
     deadzone_rot: float = 0.3
