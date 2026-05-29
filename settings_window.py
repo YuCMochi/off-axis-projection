@@ -43,12 +43,11 @@ class SettingsWindow(tk.Toplevel):
     def _build_env_tab(self, parent: ttk.Frame, cfg: Config) -> None:
         rows = [
             ("cam_index",        "Camera Index",       "int",   0,   9,    1,    cfg.cam_index),
-            ("focal_length_px",  "Focal Length (px)",  "float", 100, 1000, 1,    cfg.focal_length_px),
+            ("cam_hfov_deg",     "Camera HFOV (°)",    "float", 30,  120,  0.5,  cfg.cam_hfov_deg),
             ("max_num_faces",    "Max Faces",          "int",   1,   10,   1,    cfg.max_num_faces),
             ("lock_snap_dist_px","Lock Snap Dist (px)","int",   30,  500,  10,   cfg.lock_snap_dist_px),
             ("cam_offset_x_cm", "Cam Offset X (cm)",  "float", -30, 30,   0.5,  cfg.cam_offset_x_cm),
             ("cam_offset_y_cm", "Cam Offset Y (cm)",  "float",  0,  60,   0.5,  cfg.cam_offset_y_cm),
-            ("real_eye_dist_cm","Eye Distance (cm)",  "float",  4,  15,   0.5,  cfg.real_eye_dist_cm),
         ]
         for r, (key, label, kind, lo, hi, res, default) in enumerate(rows):
             self._add_slider_row(parent, r, key, label, kind, lo, hi, res, default)
@@ -126,7 +125,7 @@ class SettingsWindow(tk.Toplevel):
         v = self._vars
         return Config(
             cam_index         = int(v["cam_index"].get()),
-            focal_length_px   = float(v["focal_length_px"].get()),
+            cam_hfov_deg      = float(v["cam_hfov_deg"].get()),
             max_num_faces     = int(v["max_num_faces"].get()),
             lock_snap_dist_px = int(v["lock_snap_dist_px"].get()),
             cam_offset_x_cm   = float(v["cam_offset_x_cm"].get()),
@@ -134,7 +133,6 @@ class SettingsWindow(tk.Toplevel):
             output_protocol   = v["output_protocol"].get(),
             host              = v["host"].get().strip(),
             port              = int(v["port"].get()),
-            real_eye_dist_cm  = float(v["real_eye_dist_cm"].get()),
             smooth_alpha      = float(v["smooth_alpha"].get()),
             deadzone_rot      = float(v["deadzone_rot"].get()),
             deadzone_pos      = float(v["deadzone_pos"].get()),
