@@ -98,7 +98,6 @@ FACE_MODEL_IDX = [LM_NOSE_TIP, LM_CHIN, LM_LEFT_EYE, LM_RIGHT_EYE, LM_LEFT_MOUTH
 
 # ── Algorithm constants ──────────────────────────────────────────────────────
 PITCH_GIMBAL_THRESHOLD = 90.0
-MIN_EYE_DIST_PX        = 1.0
 ROT_SINGULARITY_EPS    = 1e-6
 MEDIAPIPE_MIN_CONF     = 0.5
 AXIS_DISPLAY_LEN_CM    = 5
@@ -257,7 +256,8 @@ class FaceTracker:
                 h, w = frame.shape[:2]
 
                 if cam_mtx is None:
-                    cam_mtx = get_cam_matrix(w, h, cfg.focal_length_px)
+                    focal_px = (w / 2.0) / math.tan(math.radians(cfg.cam_hfov_deg / 2.0))
+                    cam_mtx = get_cam_matrix(w, h, focal_px)
 
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(rgb)
@@ -267,7 +267,7 @@ class FaceTracker:
                         results.multi_face_landmarks, w, h, locked_eye_mid, cfg
                     )
                     img_pts = sample_2d(lm, w, h)
-                    pnp = self._solve_pose(img_pts, w, h, cfg, prev_rvec, prev_tvec)
+                    pnp = self._solve_pose(img_pts, cam_mtx, dist_cfs, prev_rvec, prev_tvec)
 
                     if pnp:
                         rvec, tvec = pnp
@@ -289,11 +289,9 @@ class FaceTracker:
                         pitch = -raw_pitch * cfg.pitch_scale
                         roll  =  raw_roll  * cfg.roll_scale
 
-                        pos = self._estimate_position(lm, w, h, cfg)
-                        if pos:
-                            tx, ty, tz = pos[0] * cfg.x_scale, pos[1] * cfg.y_scale, pos[2] * cfg.z_scale
-                        else:
-                            tx, ty, tz = 0.0, 0.0, 0.0
+                        tx = (float(tvec[0][0]) + cfg.cam_offset_x_cm) * cfg.x_scale
+                        ty = (-float(tvec[1][0]) + cfg.cam_offset_y_cm) * cfg.y_scale
+                        tz = float(tvec[2][0]) * cfg.z_scale
 
                         yaw   = f_yaw.update(yaw)
                         pitch = f_pitch.update(pitch)
@@ -372,35 +370,18 @@ class FaceTracker:
         return best, eye_mid(best)
 
     @staticmethod
-    def _solve_pose(image_pts, w, h, cfg: Config, prev_rvec, prev_tvec):
-        cam = get_cam_matrix(w, h, cfg.focal_length_px)
-        dist = np.zeros((4, 1))
+    def _solve_pose(image_pts, cam_mtx: np.ndarray, dist_cfs: np.ndarray, prev_rvec, prev_tvec):
         if prev_rvec is not None and prev_tvec is not None:
             ok, rv, tv = cv2.solvePnP(
-                FACE_MODEL_3D, image_pts, cam, dist,
+                FACE_MODEL_3D, image_pts, cam_mtx, dist_cfs,
                 rvec=prev_rvec.copy(), tvec=prev_tvec.copy(),
                 useExtrinsicGuess=True, flags=cv2.SOLVEPNP_ITERATIVE,
             )
         else:
             ok, rv, tv = cv2.solvePnP(
-                FACE_MODEL_3D, image_pts, cam, dist, flags=cv2.SOLVEPNP_SQPNP
+                FACE_MODEL_3D, image_pts, cam_mtx, dist_cfs, flags=cv2.SOLVEPNP_SQPNP
             )
         return (rv, tv) if ok else None
-
-    @staticmethod
-    def _estimate_position(landmarks, w, h, cfg: Config):
-        lx = landmarks[LM_LEFT_EYE].x * w;  ly = landmarks[LM_LEFT_EYE].y * h
-        rx = landmarks[LM_RIGHT_EYE].x * w; ry = landmarks[LM_RIGHT_EYE].y * h
-        eye_dist_px = math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
-        if eye_dist_px < MIN_EYE_DIST_PX:
-            return None
-        focal = cfg.focal_length_px
-        z_cm = (cfg.real_eye_dist_cm * focal) / eye_dist_px
-        cx_px = (landmarks[LM_LEFT_EYE].x + landmarks[LM_RIGHT_EYE].x) / 2.0 * w
-        cy_px = (landmarks[LM_LEFT_EYE].y + landmarks[LM_RIGHT_EYE].y) / 2.0 * h
-        x_cm = (cx_px - w / 2.0) * z_cm / focal + cfg.cam_offset_x_cm
-        y_cm = -((cy_px - h / 2.0) * z_cm / focal) + cfg.cam_offset_y_cm
-        return x_cm, y_cm, z_cm
 
     @staticmethod
     def _draw_preview(frame, rvec, tvec, cam_mtx, dist_cfs,

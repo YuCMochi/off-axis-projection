@@ -74,3 +74,20 @@ def test_hfov_to_focal_90deg():
     # 90° HFOV on 640-wide image → focal = 320.0 (tan 45° = 1.0)
     focal = (640 / 2.0) / math.tan(math.radians(90.0 / 2.0))
     assert focal == pytest.approx(320.0, rel=1e-6)
+
+
+def test_solve_pose_accepts_cam_mtx():
+    import cv2
+    import numpy as np
+    from tracker import FaceTracker, get_cam_matrix, FACE_MODEL_3D
+
+    cam = get_cam_matrix(640, 480, 800.0)
+    dist = np.zeros((4, 1))
+    # Project 3D face model to 2D using a known pose
+    rvec0 = np.zeros((3, 1))
+    tvec0 = np.array([[0.0], [0.0], [60.0]])
+    img_pts, _ = cv2.projectPoints(FACE_MODEL_3D, rvec0, tvec0, cam, dist)
+    result = FaceTracker._solve_pose(img_pts.reshape(-1, 2), cam, dist, None, None)
+    assert result is not None
+    _, tv = result
+    assert float(tv[2][0]) == pytest.approx(60.0, rel=0.05)
