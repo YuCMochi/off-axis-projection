@@ -223,10 +223,13 @@ class FaceTracker:
         cap = cv2.VideoCapture(cfg.cam_index)
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open camera #{cfg.cam_index}")
-        if cfg.cam_width > 0:
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.cam_width)
-        if cfg.cam_height > 0:
+        if cfg.cam_width > 0 and cfg.cam_height > 0:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  cfg.cam_width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.cam_height)
+        print(f"[tracker] camera #{cfg.cam_index} opened — "
+              f"{int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
+              f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))} @ "
+              f"{cap.get(cv2.CAP_PROP_FPS):.0f} fps")
 
         _patch_mediapipe_resource_dir()
         mp_mesh = mp.solutions.face_mesh
