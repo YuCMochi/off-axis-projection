@@ -146,6 +146,36 @@ def load_calibration() -> "dict | None":
         return None
 
 
+def _solve_pose_with_cam(image_pts, cam: np.ndarray, dist: np.ndarray,
+                          prev_rvec, prev_tvec):
+    if prev_rvec is not None and prev_tvec is not None:
+        ok, rv, tv = cv2.solvePnP(
+            FACE_MODEL_3D, image_pts, cam, dist,
+            rvec=prev_rvec.copy(), tvec=prev_tvec.copy(),
+            useExtrinsicGuess=True, flags=cv2.SOLVEPNP_ITERATIVE,
+        )
+    else:
+        ok, rv, tv = cv2.solvePnP(
+            FACE_MODEL_3D, image_pts, cam, dist, flags=cv2.SOLVEPNP_SQPNP
+        )
+    return (rv, tv) if ok else None
+
+
+def _estimate_position_with_focal(landmarks, w: int, h: int,
+                                   cfg: Config, focal_px: float):
+    lx = landmarks[LM_LEFT_EYE].x * w;  ly = landmarks[LM_LEFT_EYE].y * h
+    rx = landmarks[LM_RIGHT_EYE].x * w; ry = landmarks[LM_RIGHT_EYE].y * h
+    eye_dist_px = math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
+    if eye_dist_px < MIN_EYE_DIST_PX:
+        return None
+    z_cm = (cfg.real_eye_dist_cm * focal_px) / eye_dist_px
+    cx_px = (landmarks[LM_LEFT_EYE].x + landmarks[LM_RIGHT_EYE].x) / 2.0 * w
+    cy_px = (landmarks[LM_LEFT_EYE].y + landmarks[LM_RIGHT_EYE].y) / 2.0 * h
+    x_cm = (cx_px - w / 2.0) * z_cm / focal_px + cfg.cam_offset_x_cm
+    y_cm = -((cy_px - h / 2.0) * z_cm / focal_px) + cfg.cam_offset_y_cm
+    return x_cm, y_cm, z_cm
+
+
 # ── SmoothFilter ─────────────────────────────────────────────────────────────
 
 class SmoothFilter:
