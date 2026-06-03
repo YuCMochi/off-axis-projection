@@ -53,7 +53,8 @@ def test_is_stable_false_when_corners_move():
 
 
 def test_save_calibration_writes_json(tmp_path, monkeypatch):
-    import json, numpy as np
+    import json
+    import numpy as np
     import config
     monkeypatch.setattr(config, "CALIBRATION_PATH", tmp_path / "calibration.json")
     from calibrator import Calibrator

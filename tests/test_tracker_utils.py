@@ -62,7 +62,7 @@ def test_rot_to_euler_identity():
 
 
 def test_solve_pose_accepts_cam_and_dist_params():
-    from tracker import _solve_pose_with_cam, FACE_MODEL_3D, get_cam_matrix
+    from tracker import _solve_pose_with_cam, get_cam_matrix
     import numpy as np
     # Use a dummy set of 6 2D points that roughly correspond to the 3D model
     # viewed head-on; just verify the function signature accepts cam+dist.
@@ -84,7 +84,6 @@ def test_solve_pose_accepts_cam_and_dist_params():
 def test_estimate_position_uses_focal_px_param():
     from tracker import _estimate_position_with_focal
     from config import Config
-    import numpy as np
     import pytest
 
     class _FakeLM:
