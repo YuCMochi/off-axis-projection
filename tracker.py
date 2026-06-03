@@ -87,12 +87,12 @@ LM_LEFT_MOUTH  = 61
 LM_RIGHT_MOUTH = 291
 
 FACE_MODEL_3D = np.array([
-    [ 0.000,  0.000,  0.000],
-    [ 0.000, -3.300, -1.300],
-    [-4.500,  2.500, -4.000],
-    [ 4.500,  2.500, -4.000],
-    [-2.000,  0.000, -2.200],
-    [ 2.000,  0.000, -2.200],
+    [ 0.000,  0.000,  0.000],  # 4   nose tip (reference)
+    [ 0.000, -7.000, -1.500],  # 152 chin/menton  (~7 cm below nose)
+    [-4.500,  3.000, -3.100],  # 33  left eye outer corner
+    [ 4.500,  3.000, -3.100],  # 263 right eye outer corner
+    [-2.500, -2.700, -2.500],  # 61  left mouth corner
+    [ 2.500, -2.700, -2.500],  # 291 right mouth corner
 ], dtype=np.float64)
 FACE_MODEL_IDX = [LM_NOSE_TIP, LM_CHIN, LM_LEFT_EYE, LM_RIGHT_EYE, LM_LEFT_MOUTH, LM_RIGHT_MOUTH]
 
@@ -222,6 +222,13 @@ class FaceTracker:
         cap = cv2.VideoCapture(cfg.cam_index)
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open camera #{cfg.cam_index}")
+        if cfg.cam_width > 0 and cfg.cam_height > 0:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  cfg.cam_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.cam_height)
+        print(f"[tracker] camera #{cfg.cam_index} opened — "
+              f"{int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
+              f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))} @ "
+              f"{cap.get(cv2.CAP_PROP_FPS):.0f} fps")
 
         _patch_mediapipe_resource_dir()
         mp_mesh = mp.solutions.face_mesh

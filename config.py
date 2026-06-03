@@ -23,6 +23,8 @@ VALID_PROTOCOLS: frozenset[str] = frozenset(DEFAULT_PORTS.keys())
 class Config:
     # ── Environment Profile ──────────────────────────────────────────────────
     cam_index: int = 0
+    cam_width: int = 0   # 0 = let driver choose
+    cam_height: int = 0  # 0 = let driver choose
     cam_hfov_deg: float = 70.0
     max_num_faces: int = 5
     lock_snap_dist_px: int = 150
