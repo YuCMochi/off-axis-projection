@@ -14,6 +14,7 @@ import mediapipe as mp
 import numpy as np
 
 from config import Config
+import config as _config
 import sender
 
 # ── Windows non-ASCII path fix for frozen exe (issue #1) ────────────────────
@@ -131,6 +132,48 @@ def sample_2d(landmarks, w: int, h: int) -> np.ndarray:
         [[landmarks[i].x * w, landmarks[i].y * h] for i in FACE_MODEL_IDX],
         dtype=np.float64,
     )
+
+
+def load_calibration() -> "dict | None":
+    if not _config.CALIBRATION_PATH.exists():
+        return None
+    try:
+        import json
+        data = json.loads(_config.CALIBRATION_PATH.read_text(encoding="utf-8"))
+        _ = data["camera_matrix"], data["dist_coeffs"], data["image_size"]
+        return data
+    except Exception:
+        return None
+
+
+def _solve_pose_with_cam(image_pts, cam: np.ndarray, dist: np.ndarray,
+                          prev_rvec, prev_tvec):
+    if prev_rvec is not None and prev_tvec is not None:
+        ok, rv, tv = cv2.solvePnP(
+            FACE_MODEL_3D, image_pts, cam, dist,
+            rvec=prev_rvec.copy(), tvec=prev_tvec.copy(),
+            useExtrinsicGuess=True, flags=cv2.SOLVEPNP_ITERATIVE,
+        )
+    else:
+        ok, rv, tv = cv2.solvePnP(
+            FACE_MODEL_3D, image_pts, cam, dist, flags=cv2.SOLVEPNP_SQPNP
+        )
+    return (rv, tv) if ok else None
+
+
+def _estimate_position_with_focal(landmarks, w: int, h: int,
+                                   cfg: Config, focal_px: float):
+    lx = landmarks[LM_LEFT_EYE].x * w;  ly = landmarks[LM_LEFT_EYE].y * h
+    rx = landmarks[LM_RIGHT_EYE].x * w; ry = landmarks[LM_RIGHT_EYE].y * h
+    eye_dist_px = math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
+    if eye_dist_px < MIN_EYE_DIST_PX:
+        return None
+    z_cm = (cfg.real_eye_dist_cm * focal_px) / eye_dist_px
+    cx_px = (landmarks[LM_LEFT_EYE].x + landmarks[LM_RIGHT_EYE].x) / 2.0 * w
+    cy_px = (landmarks[LM_LEFT_EYE].y + landmarks[LM_RIGHT_EYE].y) / 2.0 * h
+    x_cm = (cx_px - w / 2.0) * z_cm / focal_px + cfg.cam_offset_x_cm
+    y_cm = -((cy_px - h / 2.0) * z_cm / focal_px) + cfg.cam_offset_y_cm
+    return x_cm, y_cm, z_cm
 
 
 # ── SmoothFilter ─────────────────────────────────────────────────────────────
@@ -252,9 +295,22 @@ class FaceTracker:
         prev_rvec = None
         prev_tvec = None
         locked_eye_mid = None
-        cam_mtx = None
-        dist_cfs = np.zeros((4, 1))
         frame_count = 0
+
+        calib = load_calibration()
+        if calib:
+            cam_mtx = np.array(calib["camera_matrix"], dtype=np.float64)
+            dist_cfs = np.array(calib["dist_coeffs"], dtype=np.float64).reshape(-1, 1)
+            focal_px = calib["camera_matrix"][0][0]
+            print(f"[tracker] calibration loaded — fx={focal_px:.1f}  rms={calib['rms_error']}")
+        else:
+            cam_mtx = get_cam_matrix(
+                int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                cfg.focal_length_px,
+            )
+            dist_cfs = np.zeros((4, 1))
+            focal_px = cfg.focal_length_px
 
         try:
             while not self._stop_event.is_set():
@@ -265,9 +321,6 @@ class FaceTracker:
                 frame = cv2.flip(frame, 1)
                 h, w = frame.shape[:2]
 
-                if cam_mtx is None:
-                    cam_mtx = get_cam_matrix(w, h, cfg.focal_length_px)
-
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(rgb)
 
@@ -276,7 +329,7 @@ class FaceTracker:
                         results.multi_face_landmarks, w, h, locked_eye_mid, cfg
                     )
                     img_pts = sample_2d(lm, w, h)
-                    pnp = self._solve_pose(img_pts, w, h, cfg, prev_rvec, prev_tvec)
+                    pnp = _solve_pose_with_cam(img_pts, cam_mtx, dist_cfs, prev_rvec, prev_tvec)
 
                     if pnp:
                         rvec, tvec = pnp
@@ -298,7 +351,7 @@ class FaceTracker:
                         pitch = -raw_pitch * cfg.pitch_scale
                         roll  =  raw_roll  * cfg.roll_scale
 
-                        pos = self._estimate_position(lm, w, h, cfg)
+                        pos = _estimate_position_with_focal(lm, w, h, cfg, focal_px)
                         if pos:
                             tx, ty, tz = pos[0] * cfg.x_scale, pos[1] * cfg.y_scale, pos[2] * cfg.z_scale
                         else:
@@ -379,37 +432,6 @@ class FaceTracker:
 
         best = max(candidates, key=eye_dist)
         return best, eye_mid(best)
-
-    @staticmethod
-    def _solve_pose(image_pts, w, h, cfg: Config, prev_rvec, prev_tvec):
-        cam = get_cam_matrix(w, h, cfg.focal_length_px)
-        dist = np.zeros((4, 1))
-        if prev_rvec is not None and prev_tvec is not None:
-            ok, rv, tv = cv2.solvePnP(
-                FACE_MODEL_3D, image_pts, cam, dist,
-                rvec=prev_rvec.copy(), tvec=prev_tvec.copy(),
-                useExtrinsicGuess=True, flags=cv2.SOLVEPNP_ITERATIVE,
-            )
-        else:
-            ok, rv, tv = cv2.solvePnP(
-                FACE_MODEL_3D, image_pts, cam, dist, flags=cv2.SOLVEPNP_SQPNP
-            )
-        return (rv, tv) if ok else None
-
-    @staticmethod
-    def _estimate_position(landmarks, w, h, cfg: Config):
-        lx = landmarks[LM_LEFT_EYE].x * w;  ly = landmarks[LM_LEFT_EYE].y * h
-        rx = landmarks[LM_RIGHT_EYE].x * w; ry = landmarks[LM_RIGHT_EYE].y * h
-        eye_dist_px = math.sqrt((rx - lx) ** 2 + (ry - ly) ** 2)
-        if eye_dist_px < MIN_EYE_DIST_PX:
-            return None
-        focal = cfg.focal_length_px
-        z_cm = (cfg.real_eye_dist_cm * focal) / eye_dist_px
-        cx_px = (landmarks[LM_LEFT_EYE].x + landmarks[LM_RIGHT_EYE].x) / 2.0 * w
-        cy_px = (landmarks[LM_LEFT_EYE].y + landmarks[LM_RIGHT_EYE].y) / 2.0 * h
-        x_cm = (cx_px - w / 2.0) * z_cm / focal + cfg.cam_offset_x_cm
-        y_cm = -((cy_px - h / 2.0) * z_cm / focal) + cfg.cam_offset_y_cm
-        return x_cm, y_cm, z_cm
 
     @staticmethod
     def _draw_preview(frame, rvec, tvec, cam_mtx, dist_cfs,

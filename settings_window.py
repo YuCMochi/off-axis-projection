@@ -25,10 +25,15 @@ class SettingsWindow(tk.Toplevel):
         tune_frame = ttk.Frame(notebook)
         notebook.add(env_frame,  text="環境設定 / Environment")
         notebook.add(tune_frame, text="調效參數 / Tuning")
+        calib_frame = ttk.Frame(notebook)
+        notebook.add(calib_frame, text="相機校正 / Calibrate")
+        self._calibrator = None
+        self._calib_result: dict | None = None
 
         self._vars: dict[str, tk.Variable] = {}
         self._build_env_tab(env_frame, cfg)
         self._build_tune_tab(tune_frame, cfg)
+        self._build_calib_tab(calib_frame, cfg)
 
         # Buttons row
         btn_frame = ttk.Frame(self)
@@ -145,6 +150,140 @@ class SettingsWindow(tk.Toplevel):
         var.trace_add("write", _slider_to_entry)
         str_var.trace_add("write", _entry_to_slider)
         entry.bind("<FocusOut>", lambda *_: str_var.set(fmt(var.get())))
+
+    def _build_calib_tab(self, parent: ttk.Frame, cfg: Config) -> None:
+        ttk.Label(parent, text="棋盤格內角 Cols", width=22, anchor="e").grid(
+            row=0, column=0, padx=6, pady=4)
+        self._calib_cols = tk.IntVar(value=9)
+        ttk.Spinbox(parent, from_=3, to=20, textvariable=self._calib_cols, width=6).grid(
+            row=0, column=1, sticky="w", padx=6)
+
+        ttk.Label(parent, text="棋盤格內角 Rows", width=22, anchor="e").grid(
+            row=1, column=0, padx=6, pady=4)
+        self._calib_rows = tk.IntVar(value=6)
+        ttk.Spinbox(parent, from_=3, to=20, textvariable=self._calib_rows, width=6).grid(
+            row=1, column=1, sticky="w", padx=6)
+
+        ttk.Label(parent, text="方格大小 Square (mm)", width=22, anchor="e").grid(
+            row=2, column=0, padx=6, pady=4)
+        self._calib_sq_mm = tk.DoubleVar(value=30.0)
+        ttk.Spinbox(parent, from_=5.0, to=200.0, increment=5.0,
+                    textvariable=self._calib_sq_mm, width=6).grid(
+            row=2, column=1, sticky="w", padx=6)
+
+        ttk.Separator(parent, orient="horizontal").grid(
+            row=3, column=0, columnspan=3, sticky="ew", padx=6, pady=6)
+
+        self._calib_btn = ttk.Button(
+            parent, text="開始校正 / Start", command=self._toggle_calibration)
+        self._calib_btn.grid(row=4, column=0, columnspan=2, pady=6)
+
+        self._calib_progress_var = tk.StringVar(value="進度：0 / 20 張已擷取")
+        ttk.Label(parent, textvariable=self._calib_progress_var).grid(
+            row=5, column=0, columnspan=3, padx=6, pady=2)
+
+        self._calib_status_var = tk.StringVar(value="狀態：就緒")
+        ttk.Label(parent, textvariable=self._calib_status_var).grid(
+            row=6, column=0, columnspan=3, padx=6, pady=2)
+
+        ttk.Separator(parent, orient="horizontal").grid(
+            row=7, column=0, columnspan=3, sticky="ew", padx=6, pady=6)
+
+        ttk.Label(parent, text="上次校正結果：", anchor="w").grid(
+            row=8, column=0, columnspan=3, sticky="w", padx=6)
+        self._calib_result_var = tk.StringVar(
+            value="  Focal X: —   Focal Y: —\n  重投影誤差: — px")
+        ttk.Label(parent, textvariable=self._calib_result_var, justify="left").grid(
+            row=9, column=0, columnspan=3, sticky="w", padx=12, pady=2)
+
+        self._calib_apply_btn = ttk.Button(
+            parent, text="套用到 Focal Length 欄位",
+            command=self._apply_calibration, state="disabled")
+        self._calib_apply_btn.grid(row=10, column=0, columnspan=2, pady=6)
+
+        self._load_existing_calibration()
+
+    def _toggle_calibration(self) -> None:
+        from calibrator import Calibrator
+        if self._calibrator and self._calibrator.running:
+            self._calibrator.stop()
+            self._calibrator = None
+            self._calib_btn.config(text="開始校正 / Start")
+            self._calib_status_var.set("狀態：已停止")
+            return
+        try:
+            cfg_snap = self._collect()
+        except (ValueError, tk.TclError):
+            cfg_snap = None
+        cam_index = cfg_snap.cam_index if cfg_snap else 0
+        cam_w = cfg_snap.cam_width if cfg_snap else 0
+        cam_h = cfg_snap.cam_height if cfg_snap else 0
+        self._calibrator = Calibrator(
+            cam_index=cam_index,
+            cam_width=cam_w,
+            cam_height=cam_h,
+            board_cols=self._calib_cols.get(),
+            board_rows=self._calib_rows.get(),
+            square_mm=self._calib_sq_mm.get(),
+            on_progress=self._on_calib_progress,
+            on_done=self._on_calib_done,
+        )
+        self._calibrator.start()
+        self._calib_btn.config(text="停止校正 / Stop")
+        self._calib_progress_var.set("進度：0 / 20 張已擷取")
+        self._calib_status_var.set("狀態：校正中…")
+
+    def _on_calib_progress(self, n: int, total: int) -> None:
+        self.after(0, lambda: self._calib_progress_var.set(
+            f"進度：{n} / {total} 張已擷取"))
+
+    def _on_calib_done(self, result: "dict | None") -> None:
+        def _update():
+            self._calibrator = None
+            self._calib_btn.config(text="開始校正 / Start")
+            if result:
+                self._calib_result = result
+                fx = result["camera_matrix"][0][0]
+                fy = result["camera_matrix"][1][1]
+                rms = result["rms_error"]
+                quality = "✓ 良好" if rms < 1.0 else "⚠ 偏高，建議重校"
+                self._calib_result_var.set(
+                    f"  Focal X: {fx:.1f} px   Focal Y: {fy:.1f} px\n"
+                    f"  重投影誤差: {rms:.3f} px  {quality}"
+                )
+                self._calib_apply_btn.config(state="normal")
+                self._calib_status_var.set("狀態：校正完成 ✓")
+            else:
+                self._calib_status_var.set("狀態：已取消或失敗")
+        self.after(0, _update)
+
+    def _apply_calibration(self) -> None:
+        if not self._calib_result:
+            return
+        fx = self._calib_result["camera_matrix"][0][0]
+        fy = self._calib_result["camera_matrix"][1][1]
+        self._vars["focal_length_px"].set((fx + fy) / 2.0)
+
+    def _load_existing_calibration(self) -> None:
+        import config as _cfg_mod
+        if not _cfg_mod.CALIBRATION_PATH.exists():
+            return
+        try:
+            import json
+            data = json.loads(_cfg_mod.CALIBRATION_PATH.read_text(encoding="utf-8"))
+            fx = data["camera_matrix"][0][0]
+            fy = data["camera_matrix"][1][1]
+            rms = data["rms_error"]
+            self._calib_result = data
+            quality = "✓ 良好" if rms < 1.0 else "⚠ 偏高，建議重校"
+            self._calib_result_var.set(
+                f"  Focal X: {fx:.1f} px   Focal Y: {fy:.1f} px\n"
+                f"  重投影誤差: {rms:.3f} px  {quality}"
+            )
+            self._calib_apply_btn.config(state="normal")
+            self._calib_status_var.set("狀態：已載入上次校正結果")
+        except Exception:
+            pass
 
     # ── Actions ───────────────────────────────────────────────────────────────
 

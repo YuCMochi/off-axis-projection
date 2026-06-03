@@ -11,3 +11,4 @@ __pycache__/
 config.json
 *.spec.bak
 .claude/settings.local.json
+calibration.json
