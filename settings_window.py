@@ -42,13 +42,15 @@ class SettingsWindow(tk.Toplevel):
 
     def _build_env_tab(self, parent: ttk.Frame, cfg: Config) -> None:
         rows = [
-            ("cam_index",        "Camera Index",       "int",   0,   9,    1,    cfg.cam_index),
-            ("focal_length_px",  "Focal Length (px)",  "float", 100, 1000, 1,    cfg.focal_length_px),
-            ("max_num_faces",    "Max Faces",          "int",   1,   10,   1,    cfg.max_num_faces),
-            ("lock_snap_dist_px","Lock Snap Dist (px)","int",   30,  500,  10,   cfg.lock_snap_dist_px),
-            ("cam_offset_x_cm", "Cam Offset X (cm)",  "float", -30, 30,   0.5,  cfg.cam_offset_x_cm),
-            ("cam_offset_y_cm", "Cam Offset Y (cm)",  "float",  0,  60,   0.5,  cfg.cam_offset_y_cm),
-            ("real_eye_dist_cm","Eye Distance (cm)",  "float",  4,  15,   0.5,  cfg.real_eye_dist_cm),
+            ("cam_index",        "Camera Index",        "int",   0,   9,    1,    cfg.cam_index),
+            ("cam_width",        "Capture Width (px)",  "int",   0,   3840, 160,  cfg.cam_width),
+            ("cam_height",       "Capture Height (px)", "int",   0,   2160, 90,   cfg.cam_height),
+            ("focal_length_px",  "Focal Length (px)",   "float", 100, 1000, 1,    cfg.focal_length_px),
+            ("max_num_faces",    "Max Faces",           "int",   1,   10,   1,    cfg.max_num_faces),
+            ("lock_snap_dist_px","Lock Snap Dist (px)", "int",   30,  500,  10,   cfg.lock_snap_dist_px),
+            ("cam_offset_x_cm", "Cam Offset X (cm)",   "float", -30, 30,   0.5,  cfg.cam_offset_x_cm),
+            ("cam_offset_y_cm", "Cam Offset Y (cm)",   "float",  0,  60,   0.5,  cfg.cam_offset_y_cm),
+            ("real_eye_dist_cm","Eye Distance (cm)",   "float",  4,  15,   0.5,  cfg.real_eye_dist_cm),
         ]
         for r, (key, label, kind, lo, hi, res, default) in enumerate(rows):
             self._add_slider_row(parent, r, key, label, kind, lo, hi, res, default)
@@ -110,15 +112,37 @@ class SettingsWindow(tk.Toplevel):
         ttk.Label(parent, text=label, width=20, anchor="e").grid(row=row, column=0, padx=6, pady=3)
         var = tk.DoubleVar(value=float(default)) if kind == "float" else tk.IntVar(value=int(default))
         self._vars[key] = var
-        scale = ttk.Scale(parent, from_=lo, to=hi, variable=var, orient="horizontal", length=220)
+        scale = ttk.Scale(parent, from_=lo, to=hi, variable=var, orient="horizontal", length=160)
         scale.grid(row=row, column=1, padx=4, pady=3)
-        val_lbl = ttk.Label(parent, text=f"{default}", width=8)
-        val_lbl.grid(row=row, column=2, padx=4)
 
-        def _update_label(*_):
-            v = var.get()
-            val_lbl.config(text=f"{v:.2f}" if kind == "float" else str(int(v)))
-        var.trace_add("write", _update_label)
+        fmt = (lambda v: f"{v:.2f}") if kind == "float" else (lambda v: str(int(round(v))))
+        str_var = tk.StringVar(value=fmt(float(default)))
+        entry = ttk.Entry(parent, textvariable=str_var, width=8)
+        entry.grid(row=row, column=2, padx=4, pady=3)
+
+        _lock = [False]
+
+        def _slider_to_entry(*_):
+            if _lock[0]:
+                return
+            _lock[0] = True
+            str_var.set(fmt(var.get()))
+            _lock[0] = False
+
+        def _entry_to_slider(*_):
+            if _lock[0]:
+                return
+            try:
+                v = float(str_var.get())
+                v = max(float(lo), min(float(hi), v))
+                _lock[0] = True
+                var.set(int(round(v)) if kind == "int" else v)
+                _lock[0] = False
+            except ValueError:
+                pass
+
+        var.trace_add("write", _slider_to_entry)
+        str_var.trace_add("write", _entry_to_slider)
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
@@ -126,6 +150,8 @@ class SettingsWindow(tk.Toplevel):
         v = self._vars
         return Config(
             cam_index         = int(v["cam_index"].get()),
+            cam_width         = int(v["cam_width"].get()),
+            cam_height        = int(v["cam_height"].get()),
             focal_length_px   = float(v["focal_length_px"].get()),
             max_num_faces     = int(v["max_num_faces"].get()),
             lock_snap_dist_px = int(v["lock_snap_dist_px"].get()),
