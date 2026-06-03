@@ -25,6 +25,7 @@ class Config:
     cam_index: int = 0
     cam_width: int = 0   # 0 = let driver choose
     cam_height: int = 0  # 0 = let driver choose
+    cam_fps: int = 0     # 0 = let driver choose
     focal_length_px: float = 320.0
     max_num_faces: int = 5
     lock_snap_dist_px: int = 150

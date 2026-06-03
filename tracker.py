@@ -226,6 +226,8 @@ class FaceTracker:
         if cfg.cam_width > 0 and cfg.cam_height > 0:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  cfg.cam_width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.cam_height)
+        if cfg.cam_fps > 0:
+            cap.set(cv2.CAP_PROP_FPS, cfg.cam_fps)
         print(f"[tracker] camera #{cfg.cam_index} opened — "
               f"{int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
               f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))} @ "
