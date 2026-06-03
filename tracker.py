@@ -14,6 +14,7 @@ import mediapipe as mp
 import numpy as np
 
 from config import Config
+import config as _config
 import sender
 
 # ── Windows non-ASCII path fix for frozen exe (issue #1) ────────────────────
@@ -131,6 +132,18 @@ def sample_2d(landmarks, w: int, h: int) -> np.ndarray:
         [[landmarks[i].x * w, landmarks[i].y * h] for i in FACE_MODEL_IDX],
         dtype=np.float64,
     )
+
+
+def load_calibration() -> "dict | None":
+    if not _config.CALIBRATION_PATH.exists():
+        return None
+    try:
+        import json
+        data = json.loads(_config.CALIBRATION_PATH.read_text(encoding="utf-8"))
+        _ = data["camera_matrix"], data["dist_coeffs"], data["image_size"]
+        return data
+    except Exception:
+        return None
 
 
 # ── SmoothFilter ─────────────────────────────────────────────────────────────
