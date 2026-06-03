@@ -295,9 +295,22 @@ class FaceTracker:
         prev_rvec = None
         prev_tvec = None
         locked_eye_mid = None
-        cam_mtx = None
-        dist_cfs = np.zeros((4, 1))
         frame_count = 0
+
+        calib = load_calibration()
+        if calib:
+            cam_mtx = np.array(calib["camera_matrix"], dtype=np.float64)
+            dist_cfs = np.array(calib["dist_coeffs"], dtype=np.float64).reshape(-1, 1)
+            focal_px = calib["camera_matrix"][0][0]
+            print(f"[tracker] calibration loaded — fx={focal_px:.1f}  rms={calib['rms_error']}")
+        else:
+            cam_mtx = get_cam_matrix(
+                int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                cfg.focal_length_px,
+            )
+            dist_cfs = np.zeros((4, 1))
+            focal_px = cfg.focal_length_px
 
         try:
             while not self._stop_event.is_set():
@@ -308,9 +321,6 @@ class FaceTracker:
                 frame = cv2.flip(frame, 1)
                 h, w = frame.shape[:2]
 
-                if cam_mtx is None:
-                    cam_mtx = get_cam_matrix(w, h, cfg.focal_length_px)
-
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(rgb)
 
@@ -319,7 +329,7 @@ class FaceTracker:
                         results.multi_face_landmarks, w, h, locked_eye_mid, cfg
                     )
                     img_pts = sample_2d(lm, w, h)
-                    pnp = self._solve_pose(img_pts, w, h, cfg, prev_rvec, prev_tvec)
+                    pnp = _solve_pose_with_cam(img_pts, cam_mtx, dist_cfs, prev_rvec, prev_tvec)
 
                     if pnp:
                         rvec, tvec = pnp
@@ -341,7 +351,7 @@ class FaceTracker:
                         pitch = -raw_pitch * cfg.pitch_scale
                         roll  =  raw_roll  * cfg.roll_scale
 
-                        pos = self._estimate_position(lm, w, h, cfg)
+                        pos = _estimate_position_with_focal(lm, w, h, cfg, focal_px)
                         if pos:
                             tx, ty, tz = pos[0] * cfg.x_scale, pos[1] * cfg.y_scale, pos[2] * cfg.z_scale
                         else:
