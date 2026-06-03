@@ -43,9 +43,9 @@ class SettingsWindow(tk.Toplevel):
     def _build_env_tab(self, parent: ttk.Frame, cfg: Config) -> None:
         rows = [
             ("cam_index",        "Camera Index",        "int",   0,   9,    1,    cfg.cam_index),
-            ("cam_width",        "Capture Width (px)",  "int",   0,   3840, 160,  cfg.cam_width),
-            ("cam_height",       "Capture Height (px)", "int",   0,   2160, 90,   cfg.cam_height),
-            ("cam_fps",          "Capture FPS",         "int",   0,   240,  1,    cfg.cam_fps),
+            ("cam_width",        "Capture W (px,0=auto)","int",   0,   3840, 160,  cfg.cam_width),
+            ("cam_height",       "Capture H (px,0=auto)","int",  0,   2160, 90,   cfg.cam_height),
+            ("cam_fps",          "Capture FPS (0=auto)", "int",  0,   240,  1,    cfg.cam_fps),
             ("focal_length_px",  "Focal Length (px)",   "float", 100, 1000, 1,    cfg.focal_length_px),
             ("max_num_faces",    "Max Faces",           "int",   1,   10,   1,    cfg.max_num_faces),
             ("lock_snap_dist_px","Lock Snap Dist (px)", "int",   30,  500,  10,   cfg.lock_snap_dist_px),
@@ -144,6 +144,7 @@ class SettingsWindow(tk.Toplevel):
 
         var.trace_add("write", _slider_to_entry)
         str_var.trace_add("write", _entry_to_slider)
+        entry.bind("<FocusOut>", lambda *_: str_var.set(fmt(var.get())))
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
