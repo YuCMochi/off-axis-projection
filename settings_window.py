@@ -265,12 +265,12 @@ class SettingsWindow(tk.Toplevel):
         self._vars["focal_length_px"].set((fx + fy) / 2.0)
 
     def _load_existing_calibration(self) -> None:
-        from config import CALIBRATION_PATH
-        if not CALIBRATION_PATH.exists():
+        import config as _cfg_mod
+        if not _cfg_mod.CALIBRATION_PATH.exists():
             return
         try:
             import json
-            data = json.loads(CALIBRATION_PATH.read_text(encoding="utf-8"))
+            data = json.loads(_cfg_mod.CALIBRATION_PATH.read_text(encoding="utf-8"))
             fx = data["camera_matrix"][0][0]
             fy = data["camera_matrix"][1][1]
             rms = data["rms_error"]
