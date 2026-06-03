@@ -13,6 +13,7 @@ else:
     _APP_DIR = Path(__file__).parent
 
 CONFIG_PATH = _APP_DIR / "config.json"
+CALIBRATION_PATH = _APP_DIR / "calibration.json"
 
 DEFAULT_HOST: str = "127.0.0.1"
 DEFAULT_PORTS: dict[str, int] = {"freed": 40000, "opentrack": 4242}
